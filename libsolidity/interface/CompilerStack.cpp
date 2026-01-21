@@ -533,6 +533,10 @@ bool CompilerStack::analyze()
 	if (!noErrors)
 		return false;
 
+	for (Source const* source: m_sourceOrder)
+		if (source->ast && !m_experimental)
+			solAssert(source->ast->annotation().experimentalFeatures.empty());
+
 	m_stackState = AnalysisSuccessful;
 	return true;
 }
@@ -767,10 +771,6 @@ bool CompilerStack::compile(State _stopAfter)
 	std::map<ContractDefinition const*, std::shared_ptr<Compiler const>> otherCompilers;
 
 	for (Source const* source: m_sourceOrder)
-	{
-		if (source->ast && !m_experimental)
-			solAssert(source->ast->annotation().experimentalFeatures.empty());
-
 		for (ASTPointer<ASTNode> const& node: source->ast->nodes())
 			if (auto contract = dynamic_cast<ContractDefinition const*>(node.get()))
 				if (isRequestedContract(*contract))
@@ -805,7 +805,6 @@ bool CompilerStack::compile(State _stopAfter)
 					if (m_errorReporter.hasErrors())
 						return false;
 				}
-	}
 
 	solAssert(!m_errorReporter.hasErrors());
 	m_stackState = CompilationSuccessful;
@@ -1827,6 +1826,8 @@ std::string CompilerStack::createMetadata(Contract const& _contract, bool _forIR
 	if (_forIR)
 		meta["settings"]["viaIR"] = _forIR;
 	meta["settings"]["evmVersion"] = m_evmVersion.name();
+	if (m_experimental)
+		meta["settings"]["experimental"] = m_experimental;
 	if (m_eofVersion.has_value())
 		meta["settings"]["eofVersion"] = *m_eofVersion;
 	meta["settings"]["compilationTarget"][_contract.contract->sourceUnitName()] =
@@ -1938,9 +1939,13 @@ bytes CompilerStack::createCBORMetadata(Contract const& _contract, bool _forIR) 
 	if (m_metadataFormat == MetadataFormat::NoMetadata)
 		return bytes{};
 
-	bool const experimentalMode = !onlySafeExperimentalFeaturesActivated(
+	bool const usesExperimentalSyntax = !_contract.contract->sourceUnit().annotation().experimentalFeatures.empty();
+	bool const onlySafeExperimentalFeatures = !onlySafeExperimentalFeaturesActivated(
 		_contract.contract->sourceUnit().annotation().experimentalFeatures
 	);
+
+	if (m_eofVersion.has_value() || (usesExperimentalSyntax && !onlySafeExperimentalFeatures))
+		solAssert(m_experimental, "Experimental mode not toggled");
 
 	std::string meta = (_forIR == m_viaIR ? metadata(_contract) : createMetadata(_contract, _forIR));
 
@@ -1953,7 +1958,7 @@ bytes CompilerStack::createCBORMetadata(Contract const& _contract, bool _forIR) 
 	else
 		solAssert(m_metadataHash == MetadataHash::None, "Invalid metadata hash");
 
-	if (experimentalMode || m_eofVersion.has_value())
+	if (m_experimental)
 		encoder.pushBool("experimental", true);
 	if (m_metadataFormat == MetadataFormat::WithReleaseVersionTag)
 		encoder.pushBytes("solc", VersionCompactBytes);

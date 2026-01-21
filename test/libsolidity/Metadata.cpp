@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(metadata_stamp)
 
 			auto const cborMetadata = requireParsedCBORMetadata(bytecode, metadataFormat);
 			if (metadataHash == CompilerStack::MetadataHash::None)
-				BOOST_CHECK(cborMetadata.size() == (metadataFormat == CompilerStack::MetadataFormat::NoMetadata ? 0 : 1));
+				BOOST_CHECK(cborMetadata.size() == (metadataFormat == CompilerStack::MetadataFormat::NoMetadata ? 0 : 2));
 			else
 			{
 				bytes hash;
@@ -132,16 +132,20 @@ BOOST_AUTO_TEST_CASE(metadata_stamp)
 
 				if (metadataFormat != CompilerStack::MetadataFormat::NoMetadata)
 				{
-					BOOST_CHECK(cborMetadata.size() == 2);
+					BOOST_CHECK(cborMetadata.size() == 3);
 					BOOST_CHECK(cborMetadata.count(hashMethod) == 1);
 					BOOST_CHECK(cborMetadata.at(hashMethod) == util::toHex(hash));
 				}
 			}
 
 			if (metadataFormat == CompilerStack::MetadataFormat::NoMetadata)
+			{
 				BOOST_CHECK(cborMetadata.count("solc") == 0);
+				BOOST_CHECK(cborMetadata.count("experimental") == 0);
+			}
 			else
 			{
+				BOOST_CHECK(cborMetadata.at("experimental") == "true");
 				BOOST_CHECK(cborMetadata.count("solc") == 1);
 				if (metadataFormat == CompilerStack::MetadataFormat::WithReleaseVersionTag)
 					BOOST_CHECK(cborMetadata.at("solc") == util::toHex(VersionCompactBytes));
