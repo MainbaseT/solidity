@@ -12,7 +12,7 @@
         },
         "outputSelection": {
             "A.sol": {
-                "A": ["ethdebug","evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug"]
+                "A": ["evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug"]
             }
         }
     }

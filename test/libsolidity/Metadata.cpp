@@ -104,7 +104,6 @@ BOOST_AUTO_TEST_CASE(metadata_stamp)
 			compilerStack.setEVMVersion(solidity::test::CommonOptions::get().evmVersion());
 			compilerStack.setOptimiserSettings(solidity::test::CommonOptions::get().optimize);
 			compilerStack.setMetadataHash(metadataHash);
-			compilerStack.setExperimental(true); // Experimental pragma requires it
 			BOOST_REQUIRE_MESSAGE(compilerStack.compile(), "Compiling contract failed");
 			bytes const& bytecode = compilerStack.runtimeObject("test").bytecode;
 			std::string const& metadata = compilerStack.metadata("test");
@@ -112,7 +111,7 @@ BOOST_AUTO_TEST_CASE(metadata_stamp)
 
 			auto const cborMetadata = requireParsedCBORMetadata(bytecode, metadataFormat);
 			if (metadataHash == CompilerStack::MetadataHash::None)
-				BOOST_CHECK(cborMetadata.size() == (metadataFormat == CompilerStack::MetadataFormat::NoMetadata ? 0 : 2));
+				BOOST_CHECK(cborMetadata.size() == (metadataFormat == CompilerStack::MetadataFormat::NoMetadata ? 0 : 1));
 			else
 			{
 				bytes hash;
@@ -132,25 +131,22 @@ BOOST_AUTO_TEST_CASE(metadata_stamp)
 
 				if (metadataFormat != CompilerStack::MetadataFormat::NoMetadata)
 				{
-					BOOST_CHECK(cborMetadata.size() == 3);
+					BOOST_CHECK(cborMetadata.size() == 2);
 					BOOST_CHECK(cborMetadata.count(hashMethod) == 1);
 					BOOST_CHECK(cborMetadata.at(hashMethod) == util::toHex(hash));
 				}
 			}
 
 			if (metadataFormat == CompilerStack::MetadataFormat::NoMetadata)
-			{
-				BOOST_CHECK(cborMetadata.count("solc") == 0);
-				BOOST_CHECK(cborMetadata.count("experimental") == 0);
-			}
+				BOOST_CHECK(cborMetadata.empty());
 			else
 			{
-				BOOST_CHECK(cborMetadata.at("experimental") == "true");
 				BOOST_CHECK(cborMetadata.count("solc") == 1);
 				if (metadataFormat == CompilerStack::MetadataFormat::WithReleaseVersionTag)
 					BOOST_CHECK(cborMetadata.at("solc") == util::toHex(VersionCompactBytes));
 				else
 					BOOST_CHECK(cborMetadata.at("solc") == VersionStringStrict);
+				BOOST_CHECK(!cborMetadata.contains("experimental"));
 			}
 		}
 }
@@ -217,7 +213,7 @@ BOOST_AUTO_TEST_CASE(metadata_stamp_experimental)
 			}
 
 			if (metadataFormat == CompilerStack::MetadataFormat::NoMetadata)
-				BOOST_CHECK(cborMetadata.count("solc") == 0);
+				BOOST_CHECK(cborMetadata.empty());
 			else
 			{
 				BOOST_CHECK(cborMetadata.count("solc") == 1);
@@ -225,7 +221,7 @@ BOOST_AUTO_TEST_CASE(metadata_stamp_experimental)
 					BOOST_CHECK(cborMetadata.at("solc") == util::toHex(VersionCompactBytes));
 				else
 					BOOST_CHECK(cborMetadata.at("solc") == VersionStringStrict);
-				BOOST_CHECK(cborMetadata.count("experimental") == 1);
+				BOOST_CHECK(cborMetadata.contains("experimental"));
 				BOOST_CHECK(cborMetadata.at("experimental") == "true");
 			}
 		}

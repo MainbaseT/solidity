@@ -1412,14 +1412,6 @@ BOOST_AUTO_TEST_CASE(cli_include_paths_ambiguous_import)
 	BOOST_REQUIRE(!result.success);
 }
 
-BOOST_AUTO_TEST_CASE(cli_ethdebug_no_ethdebug_in_help)
-{
-	OptionsReaderAndMessages result = runCLI({"solc", "--help"});
-	BOOST_REQUIRE(result.stdoutContent.find("ethdebug") == std::string::npos);
-	// just in case
-	BOOST_REQUIRE(result.stderrContent.find("ethdebug") == std::string::npos);
-}
-
 BOOST_AUTO_TEST_CASE(cli_ethdebug_incompatible_outputs)
 {
 	TemporaryDirectory tempDir(TEST_CASE_NAME);

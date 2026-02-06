@@ -46,7 +46,7 @@ class SyntaxChecker: private ASTConstVisitor
 public:
 	/// @param _errorReporter provides the error logging functionality.
 	/// @param _useYulOptimizer indicates whether Yul optimizer is enabled.
-	/// @param _experimental indicates whether the experimental toggle (option) is enabled.
+	/// @param _experimental indicates whether the experimental mode is enabled.
 	SyntaxChecker(langutil::ErrorReporter& _errorReporter, bool _useYulOptimizer, bool _experimental):
 		m_errorReporter(_errorReporter),
 		m_useYulOptimizer(_useYulOptimizer),
@@ -115,7 +115,7 @@ private:
 	/// Flag that indicates whether we are inside an unchecked block.
 	bool m_uncheckedArithmetic = false;
 
-	/// Flag that indicates whether experimental mode is toggled.
+	/// Flag that indicates whether the experimental mode is enabled.
 	bool m_experimental = false;
 
 	int m_inLoopDepth = 0;

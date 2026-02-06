@@ -883,10 +883,10 @@ class SolidityLSPTestSuite: # {{{
             print(f"{SGR_TEST_BEGIN}Testing {title} ...{SGR_RESET}")
             try:
                 with JsonRpcProcess(
-                        self.solc_path,
-                        ["--experimental", "--lsp"],
-                        trace_io=self.trace_io,
-                        print_pid=self.print_solc_pid
+                    self.solc_path,
+                    ["--experimental", "--lsp"],
+                    trace_io=self.trace_io,
+                    print_pid=self.print_solc_pid
                 ) as solc:
                     test_fn(solc)
                     self.test_counter.passed += 1

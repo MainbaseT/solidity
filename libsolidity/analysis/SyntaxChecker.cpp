@@ -83,12 +83,6 @@ bool SyntaxChecker::visit(PragmaDirective const& _pragma)
 	else if (_pragma.literals()[0] == "experimental")
 	{
 		solAssert(m_sourceUnit, "");
-		if (!m_experimental)
-			m_errorReporter.syntaxError(
-				2816_error,
-				_pragma.location(),
-				"Experimental pragmas can only be used if the experimental mode has been enabled."
-			);
 		std::vector<std::string> literals(_pragma.literals().begin() + 1, _pragma.literals().end());
 		if (literals.empty())
 			m_errorReporter.syntaxError(
@@ -116,7 +110,16 @@ bool SyntaxChecker::visit(PragmaDirective const& _pragma)
 				auto feature = ExperimentalFeatureNames.at(literal);
 				m_sourceUnit->annotation().experimentalFeatures.insert(feature);
 				if (!ExperimentalFeatureWithoutWarning.count(feature))
-					m_errorReporter.warning(2264_error, _pragma.location(), "Experimental features are turned on. Do not use experimental features on live deployments.");
+				{
+					if (!m_experimental)
+						m_errorReporter.syntaxError(
+							2816_error,
+							_pragma.location(),
+							"Experimental pragmas can only be used if experimental mode is enabled. To enable experimental mode, use the --experimental flag."
+						);
+					else
+						m_errorReporter.warning(2264_error, _pragma.location(), "Experimental features are turned on. Do not use experimental features on live deployments.");
+				}
 
 				if (feature == ExperimentalFeature::ABIEncoderV2)
 				{

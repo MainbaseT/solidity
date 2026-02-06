@@ -297,9 +297,9 @@ Json generateStandardJson(bool _viaIr, Json const& _debugInfoSelection, Json con
 	return result;
 }
 
-Json generateExperimentalStandardJson(bool _viaIr, Json const& _debugInfoSelection, Json const& _outputSelection, Code const& _code = SolidityCode(), bool _advancedOutputSelection = false)
+Json generateExperimentalStandardJson(bool _viaIR, Json const& _debugInfoSelection, Json const& _outputSelection, Code const& _code = SolidityCode(), bool _advancedOutputSelection = false)
 {
-	Json result = generateStandardJson(_viaIr, _debugInfoSelection, _outputSelection, _code, _advancedOutputSelection);
+	Json result = generateStandardJson(_viaIR, _debugInfoSelection, _outputSelection, _code, _advancedOutputSelection);
 	result["settings"]["experimental"] = true;
 	return result;
 }
@@ -2274,23 +2274,6 @@ BOOST_AUTO_TEST_CASE(no_experimental_import_ast_solidity_evmasm)
 		{
 			"language": "SolidityAST",
 			"sources": {
-				"A.sol": {
-					"content": "contract A { constructor() { uint x = 2; { uint y = 3; } } }"
-				}
-			}
-		}
-		)";
-
-		Json parsedInput;
-		BOOST_REQUIRE(util::jsonParseStrict(input, parsedInput));
-		Json result = compiler.compile(parsedInput);
-		BOOST_CHECK(containsError(result, "FatalError", "'SolidityAST' and 'EVMAssembly' inputs are experimental, and can only be used by toggling the 'settings.experimental' option."));
-	}
-	{
-		char const* input = R"(
-		{
-			"language": "SolidityAST",
-			"sources": {
 				"A": {
 		            "assemblyJson": {
 		                ".code": [
@@ -2305,102 +2288,11 @@ BOOST_AUTO_TEST_CASE(no_experimental_import_ast_solidity_evmasm)
 		Json parsedInput;
 		BOOST_REQUIRE(util::jsonParseStrict(input, parsedInput));
 		Json result = compiler.compile(parsedInput);
-		BOOST_CHECK(containsError(result, "FatalError", "'SolidityAST' and 'EVMAssembly' inputs are experimental, and can only be used by toggling the 'settings.experimental' option."));
+		BOOST_CHECK(containsError(result, "FatalError", "'SolidityAST' and 'EVMAssembly' inputs are experimental and can only be used with the 'settings.experimental' option enabled."));
 	}
 }
 
 BOOST_AUTO_TEST_CASE(no_experimental_invalid_output_selection)
-{
-	frontend::StandardCompiler compiler;
-	{
-		char const* input = R"(
-		{
-			"language": "Solidity",
-			"sources": {
-				"A.sol": {
-					"content": "contract A { constructor() { uint x = 2; { uint y = 3; } } }"
-				}
-			},
-			"settings": {
-				"outputSelection": {
-					"A.sol": {
-						"A": ["irAst"]
-					}
-				}
-			}
-		}
-		)";
-
-		Json parsedInput;
-		BOOST_REQUIRE(util::jsonParseStrict(input, parsedInput));
-		Json result = compiler.compile(parsedInput);
-		BOOST_CHECK(
-			containsError(
-				result,
-				"FatalError", "'irAst', 'irOptimizedAst', 'yulCFGJson' and 'debugInfo.ethdebug' outputs are experimental, and can only be used by toggling the 'settings.experimental' option."
-			)
-		);
-	}
-	{
-		char const* input = R"(
-		{
-			"language": "Solidity",
-			"sources": {
-				"A.sol": {
-					"content": "contract A { constructor() { uint x = 2; { uint y = 3; } } }"
-				}
-			},
-			"settings": {
-				"outputSelection": {
-					"A.sol": {
-						"A": ["irOptimizedAst"]
-					}
-				}
-			}
-		}
-		)";
-
-		Json parsedInput;
-		BOOST_REQUIRE(util::jsonParseStrict(input, parsedInput));
-		Json result = compiler.compile(parsedInput);
-		BOOST_CHECK(
-			containsError(
-				result,
-				"FatalError", "'irAst', 'irOptimizedAst', 'yulCFGJson' and 'debugInfo.ethdebug' outputs are experimental, and can only be used by toggling the 'settings.experimental' option."
-			)
-		);
-	}
-	{
-		char const* input = R"(
-		{
-			"language": "Solidity",
-			"sources": {
-				"A.sol": {
-					"content": "contract A { constructor() { uint x = 2; { uint y = 3; } } }"
-				}
-			},
-			"settings": {
-				"outputSelection": {
-					"A.sol": {
-						"A": ["yulCFGJson"]
-					}
-				}
-			}
-		}
-		)";
-
-		Json parsedInput;
-		BOOST_REQUIRE(util::jsonParseStrict(input, parsedInput));
-		Json result = compiler.compile(parsedInput);
-		BOOST_CHECK(
-			containsError(
-				result,
-				"FatalError", "'irAst', 'irOptimizedAst', 'yulCFGJson' and 'debugInfo.ethdebug' outputs are experimental, and can only be used by toggling the 'settings.experimental' option."
-			)
-		);	}
-}
-
-BOOST_AUTO_TEST_CASE(no_experimental_ethdebug)
 {
 	frontend::StandardCompiler compiler;
 	char const* input = R"(
@@ -2412,13 +2304,9 @@ BOOST_AUTO_TEST_CASE(no_experimental_ethdebug)
 			}
 		},
 		"settings": {
-			"viaIR": true,
-			"debug": {
-				"debugInfo": ["ethdebug"]
-			},
 			"outputSelection": {
 				"A.sol": {
-					"A": ["evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug"]
+					"A": ["irOptimizedAst"]
 				}
 			}
 		}
@@ -2431,32 +2319,9 @@ BOOST_AUTO_TEST_CASE(no_experimental_ethdebug)
 	BOOST_CHECK(
 		containsError(
 			result,
-			"FatalError", "'irAst', 'irOptimizedAst', 'yulCFGJson' and 'debugInfo.ethdebug' outputs are experimental, and can only be used by toggling the 'settings.experimental' option."
+			"FatalError", "'irAst', 'irOptimizedAst', 'yulCFGJson', and 'ethdebug' outputs are experimental and can only be used with the 'settings.experimental' option enabled."
 		)
-	);}
-
-BOOST_AUTO_TEST_CASE(no_experimental_eof)
-{
-	frontend::StandardCompiler compiler;
-	char const* input = R"(
-	{
-		"language": "Solidity",
-		"sources": {
-			"A.sol": {
-				"content": "contract A { constructor() { uint x = 2; { uint y = 3; } } }"
-			}
-		},
-		"settings": {
-			"eofVersion": 1,
-			"evmVersion": "osaka"
-		}
-	}
-	)";
-
-	Json parsedInput;
-	BOOST_REQUIRE(util::jsonParseStrict(input, parsedInput));
-	Json result = compiler.compile(parsedInput);
-	BOOST_CHECK(containsError(result, "FatalError", "'eofVersion' is experimental, and can only be used by toggling the 'settings.experimental' option."));
+	);
 }
 
 BOOST_AUTO_TEST_CASE(experimental_non_boolean)
@@ -2479,7 +2344,7 @@ BOOST_AUTO_TEST_CASE(experimental_non_boolean)
 	Json parsedInput;
 	BOOST_REQUIRE(util::jsonParseStrict(input, parsedInput));
 	Json result = compiler.compile(parsedInput);
-	BOOST_CHECK(containsError(result, "JSONError", "\"settings.experimental\" must be a Boolean."));
+	BOOST_CHECK(containsError(result, "JSONError", "'settings.experimental' must be a Boolean."));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

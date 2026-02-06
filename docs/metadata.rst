@@ -203,6 +203,7 @@ Below are all the possible fields:
 .. code-block:: javascript
 
     {
+      // Present if "bytecodeHash" was "ipfs" in compiler settings
       "ipfs": "<metadata hash>",
       // Present if "bytecodeHash" was "bzzr1" in compiler settings
       "bzzr1": "<metadata hash>",

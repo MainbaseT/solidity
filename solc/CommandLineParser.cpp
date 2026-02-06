@@ -164,21 +164,29 @@ void CommandLineParser::checkExperimental(std::vector<std::string> const& _optio
 	{
 		solThrow(
 			CommandLineValidationError,
-			"The following options are only available in experimental mode: " + joinOptionNames(_optionNames) + ". " +
-			"To enable experimental mode, use the --experimental flag."
+			fmt::format(
+				"The following options are only available in experimental mode: {}. "
+				"To enable experimental mode, use the --{} flag.",
+				joinOptionNames(_optionNames),
+				g_strExperimental
+			)
 		);
 	}
 
-	if (m_args.count(g_strEVMVersion))
+	if (m_args.contains(g_strEVMVersion))
 	{
-		std::optional<EVMVersion> versionOption = EVMVersion::fromString(m_args[g_strEVMVersion].as<std::string>());
-		if (versionOption && versionOption->isExperimental())
+		std::string versionOptionStr = m_args[g_strEVMVersion].as<std::string>();
+		std::optional<langutil::EVMVersion> versionOption = langutil::EVMVersion::fromString(versionOptionStr);
+
+		if (versionOption.has_value() && versionOption->isExperimental())
 			// TODO: Cover with test when the Amsterdam version is introduced
 			solThrow(
 				CommandLineValidationError,
 				fmt::format(
-					"EVM version '{}' is experimental and can only be selected in experimental mode."
-					"To enable experimental mode, use the --experimental flag", versionOption->name()
+					"EVM version '{}' is experimental and can only be selected in experimental mode. "
+					"To enable experimental mode, use the --{} flag",
+					m_options.output.evmVersion.name(),
+					g_strExperimental
 				)
 			);
 	}
@@ -502,7 +510,7 @@ void CommandLineParser::parseOutputSelection()
 	// TODO: restrict EOF version to correct EVM version.
 }
 
-po::options_description CommandLineParser::optionsDescription(bool _forHelp)
+po::options_description CommandLineParser::optionsDescription()
 {
 	// Declare the supported options.
 	po::options_description desc((R"(solc, the Solidity commandline compiler.
@@ -590,19 +598,18 @@ General Information)").c_str(),
 			("Select desired EVM version: " + annotatedEVMVersions + ".").c_str()
 		)
 	;
-	if (!_forHelp) // Note: We intentionally keep this undocumented for now.
-		outputOptions.add_options()
-			(
-				g_strEOFVersion.c_str(),
-				// Declared as uint64_t, since uint8_t will be parsed as character by boost.
-				po::value<uint64_t>()->value_name("version")->implicit_value(1),
-				"Select desired EOF version. Currently the only valid value is 1. "
-				"If not specified, legacy non-EOF bytecode will be generated."
-			)
-			(
-				g_strYul.c_str(), "The typed Yul dialect is no longer supported. For regular Yul compilation use --strict-assembly instead."
-			)
-		;
+	outputOptions.add_options()
+		(
+			g_strEOFVersion.c_str(),
+			// Declared as uint64_t, since uint8_t will be parsed as character by boost.
+			po::value<uint64_t>()->value_name("version")->implicit_value(1),
+			"Select desired EOF version. Currently the only valid value is 1. "
+			"If not specified, legacy non-EOF bytecode will be generated."
+		)
+		(
+			g_strYul.c_str(), "The typed Yul dialect is no longer supported. For regular Yul compilation use --strict-assembly instead."
+		)
+	;
 	outputOptions.add_options()
 		(
 			g_strExperimentalViaIR.c_str(),
@@ -746,24 +753,21 @@ General Information)").c_str(),
 		(CompilerOutputs::componentName(&CompilerOutputs::storageLayout).c_str(), "Slots, offsets and types of the contract's state variables located in storage.")
 		(CompilerOutputs::componentName(&CompilerOutputs::transientStorageLayout).c_str(), "Slots, offsets and types of the contract's state variables located in transient storage.")
 	;
-	if (!_forHelp) // Note: We intentionally keep this undocumented for now.
-	{
-		outputComponents.add_options()
-		(
-			CompilerOutputs::componentName(&CompilerOutputs::yulCFGJson).c_str(),
-			"Control Flow Graph (CFG) of Yul code in JSON format."
-		);
-		outputComponents.add_options()
-		(
-			CompilerOutputs::componentName(&CompilerOutputs::ethdebug).c_str(),
-			"Ethdebug output of all contracts."
-		);
-		outputComponents.add_options()
-		(
-			CompilerOutputs::componentName(&CompilerOutputs::ethdebugRuntime).c_str(),
-			"Ethdebug output of the runtime part of all contracts."
-		);
-	}
+	outputComponents.add_options()
+	(
+		CompilerOutputs::componentName(&CompilerOutputs::yulCFGJson).c_str(),
+		"Control Flow Graph (CFG) of Yul code in JSON format."
+	);
+	outputComponents.add_options()
+	(
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebug).c_str(),
+		"Ethdebug output of all contracts."
+	);
+	outputComponents.add_options()
+	(
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebugRuntime).c_str(),
+		"Ethdebug output of the runtime part of all contracts."
+	);
 	desc.add(outputComponents);
 
 	po::options_description extraOutput("Extra Output");
@@ -1167,7 +1171,11 @@ void CommandLineParser::processArgs()
 		if (!m_options.experimental && m_options.output.debugInfoSelection->ethdebug)
 			solThrow(
 				CommandLineValidationError,
-				"--" + g_strDebugInfo + " ethdebug can only be used by toggling the --" + g_strExperimental + " flag."
+				fmt::format(
+					"Ethdebug annotations are experimental and can only be included in --{} in experimental mode. To enable experimental mode, use the --{} flag.",
+					g_strDebugInfo,
+					g_strExperimental
+				)
 			);
 
 		if (m_options.output.debugInfoSelection->snippet && !m_options.output.debugInfoSelection->location)

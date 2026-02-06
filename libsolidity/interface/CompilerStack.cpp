@@ -456,6 +456,19 @@ void CompilerStack::importASTs(std::map<std::string, Json> const& _sources)
 	storeContractDefinitions();
 }
 
+namespace
+{
+
+bool onlySafeExperimentalFeaturesActivated(std::set<ExperimentalFeature> const& _features)
+{
+	for (auto const feature: _features)
+		if (!ExperimentalFeatureWithoutWarning.contains(feature))
+			return false;
+	return true;
+}
+
+}
+
 bool CompilerStack::analyze()
 {
 	solAssert(m_stackState == ParsedAndImported, "Must call analyze only after parsing was successful.");
@@ -535,7 +548,7 @@ bool CompilerStack::analyze()
 
 	for (Source const* source: m_sourceOrder)
 		if (source->ast && !m_experimental)
-			solAssert(source->ast->annotation().experimentalFeatures.empty());
+			solAssert(onlySafeExperimentalFeaturesActivated(source->ast->annotation().experimentalFeatures));
 
 	m_stackState = AnalysisSuccessful;
 	return true;
@@ -1456,17 +1469,6 @@ void CompilerStack::annotateInternalFunctionIDs()
 	}
 }
 
-namespace
-{
-bool onlySafeExperimentalFeaturesActivated(std::set<ExperimentalFeature> const& features)
-{
-	for (auto const feature: features)
-		if (!ExperimentalFeatureWithoutWarning.count(feature))
-			return false;
-	return true;
-}
-}
-
 void CompilerStack::assembleYul(
 	ContractDefinition const& _contract,
 	std::shared_ptr<evmasm::Assembly> _assembly,
@@ -1940,12 +1942,12 @@ bytes CompilerStack::createCBORMetadata(Contract const& _contract, bool _forIR) 
 		return bytes{};
 
 	bool const usesExperimentalSyntax = !_contract.contract->sourceUnit().annotation().experimentalFeatures.empty();
-	bool const onlySafeExperimentalFeatures = !onlySafeExperimentalFeaturesActivated(
+	bool const onlySafeExperimentalFeatures = onlySafeExperimentalFeaturesActivated(
 		_contract.contract->sourceUnit().annotation().experimentalFeatures
 	);
 
 	if (m_eofVersion.has_value() || (usesExperimentalSyntax && !onlySafeExperimentalFeatures))
-		solAssert(m_experimental, "Experimental mode not toggled");
+		solAssert(m_experimental, "Experimental mode not enabled");
 
 	std::string meta = (_forIR == m_viaIR ? metadata(_contract) : createMetadata(_contract, _forIR));
 

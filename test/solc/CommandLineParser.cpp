@@ -702,7 +702,7 @@ BOOST_AUTO_TEST_CASE(experimental_features_without_experimental_flag)
 
 BOOST_AUTO_TEST_CASE(debug_info_ethdebug_without_experimental_flag)
 {
-	std::string const expectedErrorMessage { "--debug-info ethdebug can only be used by toggling the --experimental flag." };
+	std::string const expectedErrorMessage {"Ethdebug annotations are experimental and can only be included in --debug-info in experimental mode. To enable experimental mode, use the --experimental flag."};
 	auto hasCorrectMessage = [&](CommandLineValidationError const& _exception) { return _exception.what() == expectedErrorMessage; };
 
 	std::vector<std::string> const commandLineOptions{"solc", "--debug-info", "ethdebug", "contract.sol"};

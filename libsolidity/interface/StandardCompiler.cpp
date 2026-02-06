@@ -826,7 +826,7 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 	if (settings.contains("experimental"))
 	{
 		if (!settings["experimental"].is_boolean())
-			return formatFatalError(Error::Type::JSONError, "\"settings.experimental\" must be a Boolean.");
+			return formatFatalError(Error::Type::JSONError, "'settings.experimental' must be a Boolean.");
 		ret.experimental = settings["experimental"].get<bool>();
 	}
 
@@ -1230,11 +1230,13 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 		}
 	}
 
-	if (
-		ret.debugInfoSelection.has_value() && ret.debugInfoSelection->ethdebug && (ret.language == "Solidity" || ret.language == "Yul") &&
-		!pipelineConfig(ret.outputSelection)[""][""].irCodegen && !isEthdebugRequested(ret.outputSelection)
-	)
-		return formatFatalError(Error::Type::FatalError, "'settings.debug.debugInfo' can only include 'ethdebug', if output 'ir', 'irOptimized', 'evm.bytecode.ethdebug', or 'evm.deployedBytecode.ethdebug' was selected.");
+	if (ret.debugInfoSelection.has_value() && ret.debugInfoSelection->ethdebug)
+	{
+		if (!ret.experimental)
+			return formatFatalError(Error::Type::FatalError, "Ethdebug annotations are experimental and can only be included in ‘settings.debug.debugInfo’ by enabling the ‘settings.experimental’ option.");
+		if (!pipelineConfig(ret.outputSelection)[""][""].irCodegen && !isEthdebugRequested(ret.outputSelection))
+			return formatFatalError(Error::Type::FatalError, "'settings.debug.debugInfo' can only include 'ethdebug', if output 'ir', 'irOptimized', 'evm.bytecode.ethdebug', or 'evm.deployedBytecode.ethdebug' was selected.");
+	}
 
 	if (isEthdebugRequested(ret.outputSelection))
 		if (ret.optimiserSettings.runYulOptimiser)
@@ -1243,17 +1245,17 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 	if (!ret.experimental)
 	{
 		if (ret.language == "SolidityAST" || ret.language == "EVMAssembly")
-			return formatFatalError(Error::Type::FatalError, "'SolidityAST' and 'EVMAssembly' inputs are experimental, and can only be used by toggling the 'settings.experimental' option.");
+			return formatFatalError(Error::Type::FatalError, "'SolidityAST' and 'EVMAssembly' inputs are experimental and can only be used with the 'settings.experimental' option enabled.");
 
 		if (ret.evmVersion.isExperimental())
 			// TODO: Cover with test when the Amsterdam version is introduced
-			return formatFatalError(Error::Type::FatalError, fmt::format("EVM version {} is experimental, and can only be used by toggling the 'settings.experimental' option.", ret.evmVersion.name()));
+			return formatFatalError(Error::Type::FatalError, fmt::format("EVM version '{}' is experimental and can only be used with the 'settings.experimental' option enabled.", ret.evmVersion.name()));
 
 		if (isExperimentalArtifactRequested(ret.outputSelection))
-			return formatFatalError(Error::Type::FatalError, "'irAst', 'irOptimizedAst', 'yulCFGJson' and 'debugInfo.ethdebug' outputs are experimental, and can only be used by toggling the 'settings.experimental' option.");
+			return formatFatalError(Error::Type::FatalError, "'irAst', 'irOptimizedAst', 'yulCFGJson', and 'ethdebug' outputs are experimental and can only be used with the 'settings.experimental' option enabled.");
 
-		if (ret.eofVersion)
-			return formatFatalError(Error::Type::FatalError, "'eofVersion' is experimental, and can only be used by toggling the 'settings.experimental' option.");
+		if (ret.eofVersion.has_value())
+			return formatFatalError(Error::Type::FatalError, "'eofVersion' setting is experimental and can only be used with the 'settings.experimental' option enabled.");
 	}
 
 	return {std::move(ret)};
