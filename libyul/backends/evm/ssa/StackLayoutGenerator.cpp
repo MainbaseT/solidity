@@ -26,7 +26,7 @@
 #include <range/v3/algorithm/count.hpp>
 #include <range/v3/algorithm/min_element.hpp>
 #include <range/v3/algorithm/replace.hpp>
-#include <range/v3/to_container.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <boost/container/flat_map.hpp>
 #include <queue>
@@ -77,12 +77,12 @@ void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 
 }
 
-SSACFGStackLayout StackLayoutGenerator::generate(LivenessAnalysis const& _liveness, CallSites const& _callSites)
+SSACFGStackLayout StackLayoutGenerator::generate(LivenessAnalysis const& _liveness, CallSites const& _callSites, ControlFlow::FunctionGraphID _graphID)
 {
-	return StackLayoutGenerator(_liveness, _callSites).m_resultLayout;
+	return StackLayoutGenerator(_liveness, _callSites, _graphID).m_resultLayout;
 }
 
-StackLayoutGenerator::StackLayoutGenerator(LivenessAnalysis const& _liveness, CallSites const& _callSites):
+StackLayoutGenerator::StackLayoutGenerator(LivenessAnalysis const& _liveness, CallSites const& _callSites, ControlFlow::FunctionGraphID):
 	m_cfg(_liveness.cfg()),
 	m_liveness(_liveness),
 	m_callSites(_callSites),
@@ -132,11 +132,10 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 	if (_blockId == m_cfg.entry)
 	{
 		if (m_cfg.function)
-			blockLayout.stackIn =
-				m_cfg.arguments |
-				ranges::views::reverse |
-				ranges::views::transform([](auto&& _variableAndValueId) -> Slot { return Slot::makeValueID(std::get<1>(_variableAndValueId)); }) |
-				ranges::to<std::vector>;
+		{
+			for (auto const& [_, valueID]: m_cfg.arguments | ranges::views::reverse)
+				blockLayout.stackIn.push_back(Slot::makeValueID(valueID));
+		}
 		m_resultLayout[_blockId] = blockLayout;
 		return;
 	}
@@ -163,35 +162,38 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 	{
 		// we have more than one entry and need to unify or at the very least apply phi fct.
 		auto const& liveIn = m_liveness.liveIn(_blockId);
+		// Pre-compute each parent's phi-term proposal (declareJunk + handlePhiFunctions) once
+		std::vector<StackData> proposals(parentExits.size());
+		for (std::size_t i = 0; i < parentExits.size(); ++i)
+		{
+			if (!parentExits[i].second)
+				continue;
+			proposals[i] = *parentExits[i].second;
+			{
+				StackType stack(proposals[i], {});
+				declareJunk(stack, liveIn);
+			}
+			handlePhiFunctions(proposals[i], PhiInverse(m_cfg, parentExits[i].first, _blockId), liveIn);
+		}
 		std::vector cumulativeCosts(parentExits.size(), std::numeric_limits<std::size_t>::max());
 		for (std::size_t i = 0; i < parentExits.size(); ++i)
 		{
 			if (!parentExits[i].second)
 				continue;
 			std::size_t cumulativeCost = 0;
-			auto referenceStackIn = *parentExits[i].second;
-			{
-				StackType stack(referenceStackIn, {});
-				declareJunk(stack, liveIn);
-			}
-			handlePhiFunctions(referenceStackIn, PhiInverse(m_cfg, parentExits[i].first, _blockId), liveIn);
 			for (std::size_t j = 0; j < parentExits.size(); ++j)
 			{
-				if (j != i)
-				{
-					if (parentExits[j].second != nullptr)
-					{
-						auto otherStackIn = *parentExits[j].second;
-						StackType stack(otherStackIn, {});
-						StackShuffler<StackType::Callbacks>::shuffle(
-							stack,
-							stackPreImage(referenceStackIn, PhiInverse(m_cfg, parentExits[j].first, _blockId)),
-							{},
-							referenceStackIn.size()
-						);
-						cumulativeCost += stack.callbacks().numOps;
-					}
-				}
+				if (j == i || !parentExits[j].second)
+					continue;
+				auto proposalCopy = proposals[j];
+				StackType stack(proposalCopy, {});
+				StackShuffler<StackType::Callbacks>::shuffle(
+					stack,
+					proposals[i],
+					{},
+					proposals[i].size()
+				);
+				cumulativeCost += stack.callbacks().numOps;
 			}
 			cumulativeCosts[i] = cumulativeCost;
 		}
@@ -199,10 +201,7 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 			std::distance(cumulativeCosts.begin(), ranges::min_element(cumulativeCosts))
 		);
 		yulAssert(parentExits[argMin].second);
-		blockLayout.stackIn = *parentExits[argMin].second;
-		StackType stack(blockLayout.stackIn, {});
-		declareJunk(stack, liveIn);
-		handlePhiFunctions(blockLayout.stackIn, PhiInverse(m_cfg, parentExits[argMin].first, _blockId), liveIn);
+		blockLayout.stackIn = std::move(proposals[argMin]);
 	}
 	m_resultLayout[_blockId] = blockLayout;
 }
