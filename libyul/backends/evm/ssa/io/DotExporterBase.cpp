@@ -21,13 +21,9 @@
 #include <libsolutil/Numeric.h>
 #include <libsolutil/Visitor.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wtautological-compare"
 #include <fmt/ranges.h>
-#pragma GCC diagnostic pop
 
 #include <deque>
-#include <set>
 
 using namespace solidity;
 using namespace solidity::util;
@@ -116,24 +112,6 @@ void DotExporterBase::writeBlock(std::ostream& _out, SSACFG::BlockId const _id)
 			);
 			_out << formatEdge(_id, _conditionalJump.zero, "0");
 			_out << formatEdge(_id, _conditionalJump.nonZero, "1");
-		},
-		[&](SSACFG::BasicBlock::JumpTable const& jt)
-		{
-			_out << fmt::format("{} -> {}Exit;\n", formatBlockHandle(_id), formatBlockHandle(_id));
-			std::string options;
-			for (auto const& jumpCase: jt.cases)
-			{
-				if (!options.empty())
-					options += " | ";
-				options += fmt::format("<{0}> {0}", formatNumber(jumpCase.first));
-			}
-			if (!options.empty())
-				options += " | ";
-			options += "<default> default";
-			_out << fmt::format("{}Exit [label=\"{{ JT | {{ {} }} }}\" shape=Mrecord];\n", formatBlockHandle(_id), options);
-			for (auto const& jumpCase: jt.cases)
-				_out << formatEdge(_id, jumpCase.second, formatNumber(jumpCase.first));
-			_out << formatEdge(_id, jt.defaultCase, "default");
 		},
 		[&](SSACFG::BasicBlock::FunctionReturn const& fr)
 		{
