@@ -35,9 +35,9 @@ namespace solidity::yul::ssa
 
 struct AssemblyCallbacks
 {
-	void swap(std::size_t const _depth)
+	void swap(StackDepth const _depth)
 	{
-		assembly->appendInstruction(evmasm::swapInstruction(static_cast<unsigned>(_depth)));
+		assembly->appendInstruction(evmasm::swapInstruction(static_cast<unsigned>(_depth.value)));
 	}
 
 	void pop()
@@ -77,9 +77,9 @@ struct AssemblyCallbacks
 		}
 	}
 
-	void dup(size_t const _depth)
+	void dup(StackDepth const _depth)
 	{
-		assembly->appendInstruction(evmasm::dupInstruction(static_cast<unsigned>(_depth)));
+		assembly->appendInstruction(evmasm::dupInstruction(static_cast<unsigned>(_depth.value)));
 	}
 
 	SSACFG const* cfg{};
