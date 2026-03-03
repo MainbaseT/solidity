@@ -14,6 +14,7 @@ Important Bugfixes:
 
 
 Compiler Features:
+* Yul Optimizer: Improve performance of control flow side effects collector and function references resolver.
 * Yul Optimizer: Remove redundant prerequisite steps from the default optimizer sequence.
 
 
