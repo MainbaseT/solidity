@@ -387,8 +387,11 @@ Input Description
           //     - `<end>` is the index of the first byte after that location.
           // - `snippet`: A single-line code snippet from the location indicated by `@src`.
           //     The snippet is quoted and follows the corresponding `@src` annotation.
-          // - `*`: Wildcard value that can be used to request everything.
-          "debugInfo": ["location", "snippet"]
+          // - `ast-id`: Annotations of the form `@ast-id <id>` over elements that can be mapped back to a definition in the original Solidity file.
+          //   `<id>` is a node ID in the Solidity AST ('ast' output).
+          // - `ethdebug`: Ethdebug annotations (experimental).
+          // - `*`: Wildcard value that can be used to request all non-experimental components.
+          "debugInfo": ["location", "snippet", "ast-id", "ethdebug"]
         },
         // Metadata settings (optional)
         "metadata": {
@@ -439,13 +442,15 @@ Input Description
         //   userdoc - User documentation (natspec)
         //   metadata - Metadata
         //   ir - Yul intermediate representation of the code before optimization
-        //   irAst - AST of Yul intermediate representation of the code before optimization
+        //   irAst - AST of Yul intermediate representation of the code before optimization (experimental)
         //   irOptimized - Intermediate representation after optimization
-        //   irOptimizedAst - AST of intermediate representation after optimization
-        //   storageLayout - Slots, offsets and types of the contract's state variables in storage.
-        //   transientStorageLayout - Slots, offsets and types of the contract's state variables in transient storage.
+        //   irOptimizedAst - AST of intermediate representation after optimization (experimental)
+        //   storageLayout - Slots, offsets and types of the contract's state variables in storage
+        //   transientStorageLayout - Slots, offsets and types of the contract's state variables in transient storage
         //   evm.assembly - New assembly format
         //   evm.legacyAssembly - Old-style assembly format in JSON
+        //   evm.bytecode.ethdebug - Debug information in ethdebug format (ethdebug/format/program schema). Can only be requested when compiling via IR. (experimental)
+        //   evm.deployedBytecode.ethdebug - Like evm.bytecode.ethdebug, but for the runtime part of the contract (experimental)
         //   evm.bytecode.functionDebugData - Debugging information at function level
         //   evm.bytecode.object - Bytecode object
         //   evm.bytecode.opcodes - Opcodes list
@@ -456,6 +461,7 @@ Input Description
         //   evm.deployedBytecode.immutableReferences - Map from AST ids to bytecode ranges that reference immutables
         //   evm.methodIdentifiers - The list of function hashes
         //   evm.gasEstimates - Function gas estimates
+        //   yulCFGJson - Control Flow Graph (CFG) of the Single Static Assignment (SSA) form of the contract (experimental)
         //
         // Note that using `evm`, `evm.bytecode`, etc. will select every
         // target part of that output. Additionally, `*` can be used as a wildcard to request everything.
@@ -608,6 +614,8 @@ Output Description
               "legacyAssembly": {},
               // Bytecode and related details.
               "bytecode": {
+                // Ethdebug output (experimental)
+                "ethdebug": {/* ... */},
                 // Debugging data at the level of functions.
                 "functionDebugData": {
                   // Now follows a set of functions including compiler-internal and
@@ -650,6 +658,8 @@ Output Description
                 }
               },
               "deployedBytecode": {
+                // Ethdebug output (experimental)
+                "ethdebug": {/* ... */},
                 /* ..., */ // The same layout as above.
                 "immutableReferences": {
                   // There are two references to the immutable with AST ID 3, both 32 bytes long. One is
@@ -674,11 +684,15 @@ Output Description
                 "internal": {
                   "heavyLifting()": "infinite"
                 }
-              }
+              },
+              // Yul CFG representation of the SSA form (experimental)
+              "yulCFGJson": {/* ... */}
             }
           }
         }
-      }
+      },
+      // Global Ethdebug output (experimental)
+      "ethdebug": {/* ... */ }
     }
 
 

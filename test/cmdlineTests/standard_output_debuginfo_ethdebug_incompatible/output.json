@@ -2,8 +2,8 @@
     "errors": [
         {
             "component": "general",
-            "formattedMessage": "Ethdebug annotations are experimental and can only be included in \u2018settings.debug.debugInfo\u2019 by enabling the \u2018settings.experimental\u2019 option.",
-            "message": "Ethdebug annotations are experimental and can only be included in \u2018settings.debug.debugInfo\u2019 by enabling the \u2018settings.experimental\u2019 option.",
+            "formattedMessage": "Ethdebug annotations are experimental and can only be included in 'settings.debug.debugInfo' by enabling the 'settings.experimental' option.",
+            "message": "Ethdebug annotations are experimental and can only be included in 'settings.debug.debugInfo' by enabling the 'settings.experimental' option.",
             "severity": "error",
             "type": "FatalError"
         }

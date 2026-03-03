@@ -682,27 +682,33 @@ BOOST_AUTO_TEST_CASE(experimental_features_without_experimental_flag)
 		"--ethdebug-runtime"
 	};
 
-	std::string const expectedErrorMessage {
-		"The following options are only available in experimental mode: --lsp, --import-ast, --import-asm-json, "
-		"--ir-ast-json, --ir-optimized-ast-json, --yul-cfg-json, --ethdebug, --ethdebug-runtime, --experimental-eof-version. "
-		"To enable experimental mode, use the --experimental flag."
-	};
-
+	std::string expectedErrorMessage;
 	auto hasCorrectMessage = [&](CommandLineValidationError const& _exception) { return _exception.what() == expectedErrorMessage; };
 
 	for (auto const& experimentalFeature: experimentalFeatures)
 	{
+		expectedErrorMessage =
+			fmt::format(
+				"The following options are only available in experimental mode: {}. "
+				"To enable experimental mode, use the --experimental flag.",
+				experimentalFeature
+			);
+
 		std::vector<std::string> const commandLineOptions{"solc", experimentalFeature, "contract.sol"};
 		BOOST_CHECK_EXCEPTION(parseCommandLine(commandLineOptions), CommandLineValidationError, hasCorrectMessage);
 	}
 
 	std::vector<std::string> const commandLineOptions{"solc", "--experimental-eof-version", "1", "contract.sol"};
+	expectedErrorMessage = "The following options are only available in experimental mode: --experimental-eof-version. To enable experimental mode, use the --experimental flag.";
 	BOOST_CHECK_EXCEPTION(parseCommandLine(commandLineOptions), CommandLineValidationError, hasCorrectMessage);
 }
 
 BOOST_AUTO_TEST_CASE(debug_info_ethdebug_without_experimental_flag)
 {
-	std::string const expectedErrorMessage {"Ethdebug annotations are experimental and can only be included in --debug-info in experimental mode. To enable experimental mode, use the --experimental flag."};
+	std::string const expectedErrorMessage =
+		"Ethdebug annotations are experimental and can only be included in --debug-info in experimental mode. "
+		"To enable experimental mode, use the --experimental flag.";
+
 	auto hasCorrectMessage = [&](CommandLineValidationError const& _exception) { return _exception.what() == expectedErrorMessage; };
 
 	std::vector<std::string> const commandLineOptions{"solc", "--debug-info", "ethdebug", "contract.sol"};
@@ -711,10 +717,10 @@ BOOST_AUTO_TEST_CASE(debug_info_ethdebug_without_experimental_flag)
 
 BOOST_AUTO_TEST_CASE(experimental_flag_with_standard_json)
 {
-	std::string const expectedErrorMessage {
+	std::string const expectedErrorMessage =
 		"Standard JSON input mode is incompatible with the --experimental flag. "
-		"Instead, please use the 'settings.experimental' setting in your Standard JSON input file to enable experimental mode."
-	};
+		"Instead, please use the 'settings.experimental' setting in your Standard JSON input file to enable experimental mode.";
+
 	auto hasCorrectMessage = [&](CommandLineValidationError const& _exception) { return _exception.what() == expectedErrorMessage; };
 
 	std::vector<std::string> const commandLineOptions{"solc", "--experimental", "--standard-json", "input.json"};

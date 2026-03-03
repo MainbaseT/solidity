@@ -324,6 +324,9 @@ private:
 
 	void parseOutputSelection();
 
+	/// Returns a list of enabled options from @_optionList
+	std::vector<std::string> enabledOptions(std::vector<std::string> const& _optionList) const;
+
 	void checkMutuallyExclusive(std::vector<std::string> const& _optionNames);
 	void checkExperimental(std::vector<std::string> const& _optionNames) const;
 	size_t countEnabledOptions(std::vector<std::string> const& _optionNames) const;

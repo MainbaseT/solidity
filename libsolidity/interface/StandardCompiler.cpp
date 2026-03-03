@@ -300,7 +300,7 @@ bool isEthdebugRequested(Json const& _outputSelection)
 	if (!_outputSelection.is_object())
 		return false;
 
-	static std::array<std::string, 3> const ethdebugArtifacts{"ethdebug", "evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug"};
+	static std::array<std::string, 2> const ethdebugArtifacts{"evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug"};
 
 	for (auto const& fileRequests: _outputSelection)
 		for (auto const& requests: fileRequests)
@@ -1233,7 +1233,7 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 	if (ret.debugInfoSelection.has_value() && ret.debugInfoSelection->ethdebug)
 	{
 		if (!ret.experimental)
-			return formatFatalError(Error::Type::FatalError, "Ethdebug annotations are experimental and can only be included in ‘settings.debug.debugInfo’ by enabling the ‘settings.experimental’ option.");
+			return formatFatalError(Error::Type::FatalError, "Ethdebug annotations are experimental and can only be included in 'settings.debug.debugInfo' by enabling the 'settings.experimental' option.");
 		if (!pipelineConfig(ret.outputSelection)[""][""].irCodegen && !isEthdebugRequested(ret.outputSelection))
 			return formatFatalError(Error::Type::FatalError, "'settings.debug.debugInfo' can only include 'ethdebug', if output 'ir', 'irOptimized', 'evm.bytecode.ethdebug', or 'evm.deployedBytecode.ethdebug' was selected.");
 	}
