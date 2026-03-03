@@ -235,6 +235,12 @@ void CompilerStack::setExperimental(bool _experimental)
 	m_experimental = _experimental;
 }
 
+void CompilerStack::setViaSSACFG(bool _viaSSACFG)
+{
+	solAssert(m_stackState < CompilationSuccessful, "Must set SSA CFG codegen before compilation.");
+	m_viaSSACFG = _viaSSACFG;
+}
+
 void CompilerStack::setEVMVersion(langutil::EVMVersion _version)
 {
 	solAssert(m_stackState < ParsedAndImported, "Must set EVM version before parsing.");
@@ -325,6 +331,7 @@ void CompilerStack::reset(bool _keepSettings)
 		m_importRemapper.clear();
 		m_libraries.clear();
 		m_viaIR = false;
+		m_viaSSACFG = false;
 		m_evmVersion = langutil::EVMVersion();
 		m_eofVersion.reset();
 		m_modelCheckerSettings = ModelCheckerSettings{};
@@ -1672,7 +1679,7 @@ void CompilerStack::generateEVMFromIR(ContractDefinition const& _contract)
 
 	std::string deployedName = IRNames::deployedObject(_contract);
 	solAssert(!deployedName.empty(), "");
-	tie(compiledContract.evmAssembly, compiledContract.evmRuntimeAssembly) = stack.assembleEVMWithDeployed(deployedName);
+	tie(compiledContract.evmAssembly, compiledContract.evmRuntimeAssembly) = stack.assembleEVMWithDeployed(deployedName, m_viaSSACFG);
 
 	if (stack.hasErrors())
 	{
