@@ -287,6 +287,7 @@ contract Test {
 //
 // ====
 // EVMVersion: >=constantinople
+// compileViaSSACFG: true
 // ----
 // library: Pairing
 // f() -> true
@@ -295,8 +296,10 @@ contract Test {
 // gas irOptimized: 275229
 // gas legacy: 293579
 // gas legacyOptimized: 276313
+// gas ssaCFGOptimized: 275439
 // verifyTx() -> true
 // ~ emit Verified(string): 0x20, 0x16, "Successfully verified."
 // gas irOptimized: 818076
 // gas legacy: 904397
 // gas legacyOptimized: 816770
+// gas ssaCFGOptimized: 819542
