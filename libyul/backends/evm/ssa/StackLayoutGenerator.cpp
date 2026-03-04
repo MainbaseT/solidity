@@ -27,6 +27,7 @@
 #include <range/v3/algorithm/min_element.hpp>
 #include <range/v3/algorithm/replace.hpp>
 #include <range/v3/view/transform.hpp>
+#include <range/v3/to_container.hpp>
 
 #include <boost/container/flat_map.hpp>
 #include <queue>
@@ -77,15 +78,25 @@ void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 
 }
 
-SSACFGStackLayout StackLayoutGenerator::generate(LivenessAnalysis const& _liveness, CallSites const& _callSites, ControlFlow::FunctionGraphID _graphID)
+SSACFGStackLayout StackLayoutGenerator::generate(
+	LivenessAnalysis const& _liveness,
+	CallSites const& _callSites,
+	ControlFlow::FunctionGraphID const _graphID
+)
 {
 	return StackLayoutGenerator(_liveness, _callSites, _graphID).m_resultLayout;
 }
 
-StackLayoutGenerator::StackLayoutGenerator(LivenessAnalysis const& _liveness, CallSites const& _callSites, ControlFlow::FunctionGraphID):
+StackLayoutGenerator::StackLayoutGenerator(
+	LivenessAnalysis const& _liveness,
+	CallSites const& _callSites,
+	ControlFlow::FunctionGraphID const _graphID
+):
 	m_cfg(_liveness.cfg()),
 	m_liveness(_liveness),
 	m_callSites(_callSites),
+	m_graphID(_graphID),
+	m_hasFunctionReturnLabel(_liveness.cfg().function && _liveness.cfg().canContinue),
 	m_junkAdmittingBlocksFinder(std::make_unique<JunkAdmittingBlocksFinder>(_liveness.cfg(), _liveness.topologicalSort())),
 	m_resultLayout(m_cfg.numBlocks())
 {
@@ -133,6 +144,9 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 	{
 		if (m_cfg.function)
 		{
+			blockLayout.stackIn.reserve(m_cfg.arguments.size() + (m_hasFunctionReturnLabel ? 1u : 0u));
+			if (m_hasFunctionReturnLabel)
+				blockLayout.stackIn.push_back(Slot::makeFunctionReturnLabel(m_graphID));
 			for (auto const& [_, valueID]: m_cfg.arguments | ranges::views::reverse)
 				blockLayout.stackIn.push_back(Slot::makeValueID(valueID));
 		}
@@ -246,7 +260,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 			)
 				stack.declareJunk(depth);
 
-		std::size_t const targetSize = findOptimalTargetSize(stack.data(), requiredStackTop, opLiveOutWithoutOutputs, junkCanBeAdded);
+		std::size_t const targetSize = findOptimalTargetSize(stack.data(), requiredStackTop, opLiveOutWithoutOutputs, junkCanBeAdded, m_hasFunctionReturnLabel);
 		StackShuffler<StackType::Callbacks>::shuffle(
 			stack,
 			requiredStackTop,
@@ -274,7 +288,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 		if (!conditionSlotAlreadyFinal)
 		{
 			auto const condition = Slot::makeValueID(cjump->condition);
-			auto const targetSize = findOptimalTargetSize(stack.data(), {condition}, blockLiveOut, false);
+			auto const targetSize = findOptimalTargetSize(stack.data(), {condition}, blockLiveOut, false, m_hasFunctionReturnLabel);
 			StackShuffler<StackType::Callbacks>::shuffle(
 				stack, {condition}, blockLiveOut, targetSize
 			);
@@ -304,6 +318,15 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				declareJunk(zeroStack, zeroLiveIn);
 			}
 		}
+	}
+
+	if (auto const* functionReturn = std::get_if<SSACFG::BasicBlock::FunctionReturn>(&block.exit))
+	{
+		yulAssert(m_hasFunctionReturnLabel, "When there is a proper function return, we need to have a label for it");
+		// in case there are return values, let's bring the function return label to the top
+		StackData returnStack = functionReturn->returnValues | ranges::views::transform(StackSlot::makeValueID) | ranges::to<std::vector>;
+		returnStack.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
+		StackShuffler<StackType::Callbacks>::shuffle(stack, returnStack);
 	}
 
 	blockLayout.stackOut = currentStackData;

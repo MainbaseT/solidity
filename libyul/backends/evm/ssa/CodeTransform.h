@@ -67,6 +67,7 @@ struct AssemblyCallbacks
 		case StackSlot::Kind::FunctionCallReturnLabel:
 		{
 			auto const& call = callSites->functionCall(_slot.functionCallReturnLabel());
+			yulAssert(returnLabels->count(&call), "FunctionCallReturnLabel not pre-registered before shuffle.");
 			assembly->appendLabelReference(returnLabels->at(&call));
 			return;
 		}
@@ -132,6 +133,7 @@ private:
 	CallSites const& m_callSites;
 	SSACFG const& m_cfg;
 	SSACFGStackLayout const& m_stackLayout;
+	ControlFlow::FunctionGraphID const m_graphID;
 
 	std::vector<std::uint8_t> m_blockIsTransformed;
 	std::vector<AbstractAssembly::LabelID> m_blockLabels;
