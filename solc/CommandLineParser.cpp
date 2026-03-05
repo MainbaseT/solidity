@@ -49,6 +49,7 @@ static std::string const g_strEVM = "evm";
 static std::string const g_strEVMVersion = "evm-version";
 static std::string const g_strEOFVersion = "experimental-eof-version";
 static std::string const g_strViaIR = "via-ir";
+static std::string const g_strViaSSACFG = "via-ssa-cfg";
 static std::string const g_strExperimentalViaIR = "experimental-via-ir";
 static std::string const g_strExperimental = "experimental";
 static std::string const g_strGas = "gas";
@@ -626,6 +627,10 @@ General Information)").c_str(),
 			"Turn on compilation mode via the IR."
 		)
 		(
+			g_strViaSSACFG.c_str(),
+			"(experimental) Turn on SSA CFG-based code generation. Implies compilation via IR."
+		)
+		(
 			g_strRevertStrings.c_str(),
 			po::value<std::string>()->value_name(util::joinHumanReadable(g_revertStringsArgs, ",")),
 			"Strip revert (and require) reason strings or add additional debugging information."
@@ -999,6 +1004,7 @@ void CommandLineParser::processArgs()
 		"ethdebug",
 		"ethdebug-runtime",
 		g_strEOFVersion,
+		g_strViaSSACFG,
 	});
 
 	if (m_args.count(g_strHelp) > 0)
@@ -1063,7 +1069,8 @@ void CommandLineParser::processArgs()
 		{g_strModelCheckerTimeout, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
 		{g_strModelCheckerBMCLoopIterations, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
 		{g_strModelCheckerContracts, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
-		{g_strModelCheckerTargets, {InputMode::Compiler, InputMode::CompilerWithASTImport}}
+		{g_strModelCheckerTargets, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
+		{g_strViaSSACFG, {InputMode::Compiler, InputMode::CompilerWithASTImport, InputMode::Assembler}}
 	};
 	std::vector<std::string> invalidOptionsForCurrentInputMode;
 	for (auto const& [optionName, inputModes]: validOptionInputModeCombinations)
@@ -1372,8 +1379,17 @@ void CommandLineParser::processArgs()
 				"Optimizer can only be used for strict assembly. Use --"  + g_strStrictAssembly + "."
 			);
 
+		m_options.output.viaSSACFG = m_args.contains(g_strViaSSACFG);
+		if (m_options.output.viaSSACFG)
+			if (m_options.assembly.inputLanguage != Input::StrictAssembly)
+				solThrow(
+					CommandLineValidationError,
+					"--" + g_strViaSSACFG + " can only be used with strict assembly. Use --" + g_strStrictAssembly + "."
+				);
 		if (m_options.compiler.outputs.ethdebug || m_options.compiler.outputs.ethdebugRuntime)
 		{
+			if (m_options.output.viaSSACFG)
+				solUnimplemented("ethdebug is not yet supported with --" + g_strViaSSACFG + ".");
 			if (m_options.optimiserSettings().runYulOptimiser)
 				solUnimplemented(
 					"Optimization (using --" + g_strOptimize + ") is not yet supported with ethdebug."
@@ -1514,6 +1530,9 @@ void CommandLineParser::processArgs()
 		m_args.count(g_strModelCheckerTargets) ||
 		m_args.count(g_strModelCheckerTimeout);
 	m_options.output.viaIR = (m_args.count(g_strExperimentalViaIR) > 0 || m_args.count(g_strViaIR) > 0);
+	m_options.output.viaSSACFG = m_args.contains(g_strViaSSACFG);
+	if (m_options.output.viaSSACFG)
+		m_options.output.viaIR = true;
 
 	solAssert(
 		m_options.input.mode == InputMode::Compiler ||
@@ -1539,6 +1558,9 @@ void CommandLineParser::processArgs()
 				CommandLineValidationError,
 				enableEthdebugMessage + " output can only be selected, if --via-ir was specified."
 			);
+
+		if (m_options.output.viaSSACFG)
+			solUnimplemented("ethdebug is not yet supported with --" + g_strViaSSACFG + ".");
 
 		if (incompatibleEthdebugOutputs)
 			solThrow(

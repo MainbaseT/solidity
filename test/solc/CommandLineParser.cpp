@@ -155,7 +155,8 @@ BOOST_AUTO_TEST_CASE(cli_mode_options)
 			"--model-checker-show-unsupported",
 			"--model-checker-solvers=z3,smtlib2",
 			"--model-checker-targets=underflow,divByZero",
-			"--model-checker-timeout=5"
+			"--model-checker-timeout=5",
+			"--via-ssa-cfg"
 		};
 
 		if (inputMode == InputMode::CompilerWithASTImport)
@@ -183,6 +184,7 @@ BOOST_AUTO_TEST_CASE(cli_mode_options)
 		expectedOptions.output.overwriteFiles = true;
 		expectedOptions.output.evmVersion = EVMVersion::spuriousDragon();
 		expectedOptions.output.viaIR = true;
+		expectedOptions.output.viaSSACFG = true;
 		expectedOptions.output.revertStrings = RevertStrings::Strip;
 		expectedOptions.output.debugInfoSelection = DebugInfoSelection::fromString("location");
 		expectedOptions.formatting.json = JsonFormat{JsonFormat::Pretty, 7};
@@ -318,9 +320,11 @@ BOOST_AUTO_TEST_CASE(assembly_mode_options)
 		commandLine += assemblyOptions;
 		if (expectedLanguage == YulStack::Language::StrictAssembly)
 			commandLine += std::vector<std::string>{
+				"--experimental",
 				"--optimize",
 				"--optimize-runs=1000",
 				"--yul-optimizations=agf",
+				"--via-ssa-cfg",
 			};
 
 		CommandLineOptions expectedOptions;
@@ -357,10 +361,12 @@ BOOST_AUTO_TEST_CASE(assembly_mode_options)
 		expectedOptions.compiler.outputs.astCompactJson = true;
 		if (expectedLanguage == YulStack::Language::StrictAssembly)
 		{
+			expectedOptions.experimental = true;
 			expectedOptions.optimizer.optimizeEvmasm = true;
 			expectedOptions.optimizer.optimizeYul = true;
 			expectedOptions.optimizer.yulSteps = "agf";
 			expectedOptions.optimizer.expectedExecutionsPerDeployment = 1000;
+			expectedOptions.output.viaSSACFG = true;
 		}
 
 		CommandLineOptions parsedOptions = parseCommandLine(commandLine);
@@ -436,7 +442,8 @@ BOOST_AUTO_TEST_CASE(invalid_options_input_modes_combinations)
 		{"--model-checker-solvers=z3,smtlib2", {"--assemble", "--strict-assembly", "--standard-json", "--link"}},
 		{"--model-checker-timeout=5", {"--assemble", "--strict-assembly", "--standard-json", "--link"}},
 		{"--model-checker-contracts=contract1.yul:A,contract2.yul:B", {"--assemble", "--strict-assembly", "--standard-json", "--link"}},
-		{"--model-checker-targets=underflow,divByZero", {"--assemble", "--strict-assembly", "--standard-json", "--link"}}
+		{"--model-checker-targets=underflow,divByZero", {"--assemble", "--strict-assembly", "--standard-json", "--link"}},
+		{"--via-ssa-cfg", {"--standard-json", "--link", "--import-asm-json"}}
 	};
 
 	for (auto const& [optionName, inputModes]: invalidOptionInputModeCombinations)
@@ -448,9 +455,24 @@ BOOST_AUTO_TEST_CASE(invalid_options_input_modes_combinations)
 			soltestAssert(!optionNameWithoutValue.empty());
 
 			std::vector<std::string> commandLine = {"solc", optionName, "file", inputMode};
+			bool experimentalMode = false;
+			if (optionNameWithoutValue == "--via-ssa-cfg")
+			{
+				commandLine.push_back("--experimental");
+				experimentalMode = true;
+			}
 
 			std::string expectedMessage = "The following options are not supported in the current input mode: " + optionNameWithoutValue;
-			auto hasCorrectMessage = [&](CommandLineValidationError const& _exception) { return _exception.what() == expectedMessage; };
+			// When --experimental is combined with --standard-json, a different error fires first
+			// (standard JSON mode is incompatible with --experimental flag). Accept that too.
+			auto hasCorrectMessage = [&](CommandLineValidationError const& _exception)
+			{
+				std::string const what = _exception.what();
+				return what == expectedMessage || (
+					experimentalMode &&
+					what.starts_with("Standard JSON input mode is incompatible with the --experimental flag.")
+				);
+			};
 
 			BOOST_CHECK_EXCEPTION(parseCommandLine(commandLine), CommandLineValidationError, hasCorrectMessage);
 		}
@@ -679,7 +701,8 @@ BOOST_AUTO_TEST_CASE(experimental_features_without_experimental_flag)
 		"--ir-optimized-ast-json",
 		"--yul-cfg-json",
 		"--ethdebug",
-		"--ethdebug-runtime"
+		"--ethdebug-runtime",
+		"--via-ssa-cfg"
 	};
 
 	std::string expectedErrorMessage;
@@ -701,6 +724,13 @@ BOOST_AUTO_TEST_CASE(experimental_features_without_experimental_flag)
 	std::vector<std::string> const commandLineOptions{"solc", "--experimental-eof-version", "1", "contract.sol"};
 	expectedErrorMessage = "The following options are only available in experimental mode: --experimental-eof-version. To enable experimental mode, use the --experimental flag.";
 	BOOST_CHECK_EXCEPTION(parseCommandLine(commandLineOptions), CommandLineValidationError, hasCorrectMessage);
+}
+
+BOOST_AUTO_TEST_CASE(via_ssa_cfg_smoke)
+{
+	auto const commandLineOptions = parseCommandLine({"solc", "--experimental", "--via-ssa-cfg", "contract.sol"});
+	BOOST_CHECK_EQUAL(commandLineOptions.output.viaSSACFG, true);
+	BOOST_CHECK_EQUAL(commandLineOptions.output.viaIR, true);
 }
 
 BOOST_AUTO_TEST_CASE(debug_info_ethdebug_without_experimental_flag)
