@@ -50,6 +50,7 @@ static std::string const g_strEVMVersion = "evm-version";
 static std::string const g_strEOFVersion = "experimental-eof-version";
 static std::string const g_strViaIR = "via-ir";
 static std::string const g_strExperimentalViaIR = "experimental-via-ir";
+static std::string const g_strExperimental = "experimental";
 static std::string const g_strGas = "gas";
 static std::string const g_strHelp = "help";
 static std::string const g_strImportAst = "import-ast";
@@ -154,6 +155,40 @@ void CommandLineParser::checkMutuallyExclusive(std::vector<std::string> const& _
 			"The following options are mutually exclusive: " + joinOptionNames(_optionNames) + ". " +
 			"Select at most one."
 		);
+	}
+}
+
+void CommandLineParser::checkExperimental(std::vector<std::string> const& _optionNames) const
+{
+	if (!m_args.contains(g_strExperimental) && countEnabledOptions(_optionNames) > 0)
+	{
+		solThrow(
+			CommandLineValidationError,
+			fmt::format(
+				"The following options are only available in experimental mode: {}. "
+				"To enable experimental mode, use the --{} flag.",
+				joinOptionNames(enabledOptions(_optionNames)),
+				g_strExperimental
+			)
+		);
+	}
+
+	if (m_args.contains(g_strEVMVersion))
+	{
+		std::string versionOptionStr = m_args[g_strEVMVersion].as<std::string>();
+		std::optional<langutil::EVMVersion> versionOption = langutil::EVMVersion::fromString(versionOptionStr);
+
+		if (versionOption.has_value() && versionOption->isExperimental())
+			// TODO: Cover with test when the Amsterdam version is introduced
+			solThrow(
+				CommandLineValidationError,
+				fmt::format(
+					"EVM version '{}' is experimental and can only be selected in experimental mode. "
+					"To enable experimental mode, use the --{} flag",
+					m_options.output.evmVersion.name(),
+					g_strExperimental
+				)
+			);
 	}
 }
 
@@ -401,6 +436,12 @@ void CommandLineParser::parseLibraryOption(std::string const& _input)
 		}
 }
 
+std::vector<std::string> CommandLineParser::enabledOptions(std::vector<std::string> const& _optionList) const
+{
+	auto optionEnabled = [&](std::string const& _option) { return m_args.contains(_option); };
+	return _optionList | ranges::views::filter(optionEnabled) | ranges::to_vector;
+}
+
 void CommandLineParser::parseOutputSelection()
 {
 	static auto outputSupported = [](InputMode _mode, std::string_view _outputName)
@@ -475,7 +516,7 @@ void CommandLineParser::parseOutputSelection()
 	// TODO: restrict EOF version to correct EVM version.
 }
 
-po::options_description CommandLineParser::optionsDescription(bool _forHelp)
+po::options_description CommandLineParser::optionsDescription()
 {
 	// Declare the supported options.
 	po::options_description desc((R"(solc, the Solidity commandline compiler.
@@ -543,7 +584,7 @@ General Information)").c_str(),
 	std::string annotatedEVMVersions = util::joinHumanReadable(
 		allEVMVersions | ranges::views::transform(annotateEVMVersion),
 		", ",
-		" or "
+		", or "
 	);
 
 	po::options_description outputOptions("Output Options");
@@ -563,20 +604,19 @@ General Information)").c_str(),
 			("Select desired EVM version: " + annotatedEVMVersions + ".").c_str()
 		)
 	;
-	if (!_forHelp) // Note: We intentionally keep this undocumented for now.
-		outputOptions.add_options()
-			(
-				g_strEOFVersion.c_str(),
-				// Declared as uint64_t, since uint8_t will be parsed as character by boost.
-				po::value<uint64_t>()->value_name("version")->implicit_value(1),
-				"Select desired EOF version. Currently the only valid value is 1. "
-				"If not specified, legacy non-EOF bytecode will be generated."
-			)
-			(
-				g_strYul.c_str(), "The typed Yul dialect is no longer supported. For regular Yul compilation use --strict-assembly instead."
-			)
-		;
 	outputOptions.add_options()
+		(
+			g_strEOFVersion.c_str(),
+			// Declared as uint64_t, since uint8_t will be parsed as character by boost.
+			po::value<uint64_t>()->value_name("version")->implicit_value(1),
+			"(experimental) Select desired EOF version. Currently the only valid value is 1. "
+			"If not specified, non-EOF bytecode will be generated."
+		)
+		(
+			g_strYul.c_str(),
+			"(disabled) Switch to typed Yul mode. The typed Yul dialect is no longer supported. "
+			"For regular Yul compilation use --strict-assembly instead."
+		)
 		(
 			g_strExperimentalViaIR.c_str(),
 			"Deprecated synonym of --via-ir."
@@ -594,8 +634,10 @@ General Information)").c_str(),
 			g_strDebugInfo.c_str(),
 			po::value<std::string>()->default_value(util::toString(DebugInfoSelection::Default())),
 			("Debug info components to be included in the produced EVM assembly and Yul code. "
-			"Value can be all, none or a comma-separated list containing one or more of the "
-			"following components: " + util::joinHumanReadable(DebugInfoSelection::Default().selectedNames()) + ".").c_str()
+			"Value can be 'all', 'none' or a comma-separated list containing one or more of the "
+			"following components: " + util::joinHumanReadable(DebugInfoSelection::AllExceptExperimental().selectedNames()) +
+			", or ethdebug (experimental). "
+			"Note that 'all' does not include experimental components.").c_str()
 		)
 		(
 			g_strStopAfter.c_str(),
@@ -627,21 +669,25 @@ General Information)").c_str(),
 		)
 		(
 			g_strImportAst.c_str(),
-			("Import ASTs to be compiled, assumes input holds the AST in compact JSON format. "
-			"Supported Inputs is the output of the --" + g_strStandardJSON + " or the one produced by "
-			"--" + g_strCombinedJson + " " + CombinedJsonRequests::componentName(&CombinedJsonRequests::ast)).c_str()
+			("(experimental) Resume compilation from an abstract syntax tree (AST) representing already parsed and analyzed Solidity code. "
+			"In this mode the compiler expects exactly one input file, containing an AST in compact JSON format, as produced by"
+			" --" + CompilerOutputs::componentName(&CompilerOutputs::astCompactJson) + ", --" +
+			CombinedJsonRequests::componentName(&CombinedJsonRequests::ast) + " ast or the 'ast' output in Standard JSON.").c_str()
 		)
 		(
 			g_strImportEvmAssemblerJson.c_str(),
-			("Import EVM assembly in JSON format produced by --asm-json. "
-			"WARNING: --asm-json output is already optimized according to settings stored in metadata. "
+			("(experimental) Resume compilation from EVM assembly. "
+			"In this mode the compiler expects exactly one input file, containing assembly in JSON format, "
+			"as produced by --" + g_strImportEvmAssemblerJson + "or the 'evm.legacyAssembly' output in Standard JSON. "
+			"WARNING: --" + g_strImportEvmAssemblerJson + " output is already optimized according to settings stored in metadata. "
 			"Using --" + g_strOptimize + " in this mode is allowed, but not necessary under normal circumstances. "
-			"It forces the optimizer to run again and can produce bytecode that is not reproducible from metadata.").c_str()
+			"--" + g_strOptimize + " forces the optimizer to run again and can produce bytecode that is not reproducible from metadata.").c_str()
 		)
 		(
 			g_strLSP.c_str(),
-			"Switch to language server mode (\"LSP\"). Allows the compiler to be used as an analysis backend "
-			"for your favourite IDE."
+			"(experimental) Switch to the language server mode. "
+			"Allows the compiler to be used as an analysis backend for your favourite IDE. "
+			"In this mode no input files are accepted and the compiler expects language server protocol (LSP) messages on standard input."
 		)
 	;
 	desc.add(alternativeInputModes);
@@ -709,34 +755,28 @@ General Information)").c_str(),
 		(CompilerOutputs::componentName(&CompilerOutputs::binaryRuntime).c_str(), "Binary of the runtime part of the contracts in hex.")
 		(CompilerOutputs::componentName(&CompilerOutputs::abi).c_str(), "ABI specification of the contracts.")
 		(CompilerOutputs::componentName(&CompilerOutputs::ir).c_str(), "Intermediate Representation (IR) of all contracts.")
-		(CompilerOutputs::componentName(&CompilerOutputs::irAstJson).c_str(), "AST of Intermediate Representation (IR) of all contracts in a compact JSON format.")
+		(CompilerOutputs::componentName(&CompilerOutputs::irAstJson).c_str(), "(experimental) AST of Intermediate Representation (IR) of all contracts in a compact JSON format.")
 		(CompilerOutputs::componentName(&CompilerOutputs::irOptimized).c_str(), "Optimized Intermediate Representation (IR) of all contracts.")
-		(CompilerOutputs::componentName(&CompilerOutputs::irOptimizedAstJson).c_str(), "AST of optimized Intermediate Representation (IR) of all contracts in a compact JSON format.")
+		(CompilerOutputs::componentName(&CompilerOutputs::irOptimizedAstJson).c_str(), "(experimental) AST of optimized Intermediate Representation (IR) of all contracts in a compact JSON format.")
 		(CompilerOutputs::componentName(&CompilerOutputs::signatureHashes).c_str(), "Function signature hashes of the contracts.")
 		(CompilerOutputs::componentName(&CompilerOutputs::natspecUser).c_str(), "Natspec user documentation of all contracts.")
 		(CompilerOutputs::componentName(&CompilerOutputs::natspecDev).c_str(), "Natspec developer documentation of all contracts.")
 		(CompilerOutputs::componentName(&CompilerOutputs::metadata).c_str(), "Combined Metadata JSON whose IPFS hash is stored on-chain.")
 		(CompilerOutputs::componentName(&CompilerOutputs::storageLayout).c_str(), "Slots, offsets and types of the contract's state variables located in storage.")
 		(CompilerOutputs::componentName(&CompilerOutputs::transientStorageLayout).c_str(), "Slots, offsets and types of the contract's state variables located in transient storage.")
-	;
-	if (!_forHelp) // Note: We intentionally keep this undocumented for now.
-	{
-		outputComponents.add_options()
-		(
-			CompilerOutputs::componentName(&CompilerOutputs::yulCFGJson).c_str(),
-			"Control Flow Graph (CFG) of Yul code in JSON format."
-		);
-		outputComponents.add_options()
-		(
-			CompilerOutputs::componentName(&CompilerOutputs::ethdebug).c_str(),
-			"Ethdebug output of all contracts."
-		);
-		outputComponents.add_options()
-		(
-			CompilerOutputs::componentName(&CompilerOutputs::ethdebugRuntime).c_str(),
-			"Ethdebug output of the runtime part of all contracts."
-		);
-	}
+	(
+		CompilerOutputs::componentName(&CompilerOutputs::yulCFGJson).c_str(),
+		"(experimental) Control Flow Graph (CFG) of Yul code in Static Single Assignment (SSA) form in JSON format."
+	)
+	(
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebug).c_str(),
+		"(experimental) Debug information in ethdebug format for all contracts (ethdebug/format/program schema). "
+		"When enabled, an extra global output containing the ethdebug/format/info/resources schema with information shared by all contracts is automatically enabled as well."
+	)
+	(
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebugRuntime).c_str(),
+		("(experimental) Like --" + CompilerOutputs::componentName(&CompilerOutputs::ethdebug) + ", but for the runtime part of the contracts.").c_str()
+	);
 	desc.add(outputComponents);
 
 	po::options_description extraOutput("Extra Output");
@@ -879,6 +919,17 @@ General Information)").c_str(),
 	;
 	desc.add(smtCheckerOptions);
 
+	po::options_description experimentalOptions("Experimental options");
+	experimentalOptions.add_options()
+		(
+			g_strExperimental.c_str(),
+			"Enable experimental mode. "
+			"This flag does not activate any experimental features on its own - "
+			"it unlocks the ability to use them through the usual flags and pragmas."
+		)
+	;
+	desc.add(experimentalOptions);
+
 	desc.add_options()(g_strInputFile.c_str(), po::value<std::vector<std::string>>(), "input file");
 	return desc;
 }
@@ -922,6 +973,9 @@ void CommandLineParser::processArgs()
 	else if (m_args.count(g_strColor) > 0)
 		m_options.formatting.coloredOutput = true;
 
+	if (m_args.contains(g_strExperimental))
+		m_options.experimental = true;
+
 	checkMutuallyExclusive({
 		g_strHelp,
 		g_strLicense,
@@ -933,6 +987,18 @@ void CommandLineParser::processArgs()
 		g_strImportAst,
 		g_strLSP,
 		g_strImportEvmAssemblerJson,
+	});
+
+	checkExperimental({
+		g_strLSP,
+		g_strImportAst,
+		g_strImportEvmAssemblerJson,
+		"ir-ast-json",
+		"ir-optimized-ast-json",
+		"yul-cfg-json",
+		"ethdebug",
+		"ethdebug-runtime",
+		g_strEOFVersion,
 	});
 
 	if (m_args.count(g_strHelp) > 0)
@@ -962,6 +1028,14 @@ void CommandLineParser::processArgs()
 		m_options.input.mode == InputMode::Version
 	)
 		return;
+
+	if (m_options.experimental && m_options.input.mode == InputMode::StandardJson)
+		solThrow(
+			CommandLineValidationError,
+			"Standard JSON input mode is incompatible with the --" + g_strExperimental + " flag. "
+			"Instead, please use the 'settings.experimental' setting in your Standard JSON input file to "
+			"enable experimental mode."
+		);
 
 	if (m_args.count(g_strYul) > 0)
 		solThrow(
@@ -1035,6 +1109,7 @@ void CommandLineParser::processArgs()
 			g_strPrettyJson,
 			"srcmap",
 			"srcmap-runtime",
+			g_strExperimental,
 		};
 
 		for (auto const& [optionName, optionValue]: m_args)
@@ -1101,6 +1176,16 @@ void CommandLineParser::processArgs()
 		m_options.output.debugInfoSelection = DebugInfoSelection::fromString(optionValue);
 		if (!m_options.output.debugInfoSelection.has_value())
 			solThrow(CommandLineValidationError, "Invalid value for --" + g_strDebugInfo + " option: " + optionValue);
+
+		if (!m_options.experimental && m_options.output.debugInfoSelection->ethdebug)
+			solThrow(
+				CommandLineValidationError,
+				fmt::format(
+					"Ethdebug annotations are experimental and can only be included in --{} in experimental mode. To enable experimental mode, use the --{} flag.",
+					g_strDebugInfo,
+					g_strExperimental
+				)
+			);
 
 		if (m_options.output.debugInfoSelection->snippet && !m_options.output.debugInfoSelection->location)
 			solThrow(CommandLineValidationError, "To use 'snippet' with --" + g_strDebugInfo + " you must select also 'location'.");

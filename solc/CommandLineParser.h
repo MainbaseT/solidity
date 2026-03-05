@@ -272,6 +272,8 @@ struct CommandLineOptions
 		bool initialize = false;
 		ModelCheckerSettings settings;
 	} modelChecker;
+
+	bool experimental = false;
 };
 
 /// Parses the command-line arguments and produces a filled-out CommandLineOptions structure.
@@ -286,12 +288,12 @@ public:
 
 	CommandLineOptions const& options() const { return m_options; }
 
-	static void printHelp(std::ostream& _out) { _out << optionsDescription(true /* _forHelp */); }
+	static void printHelp(std::ostream& _out) { _out << optionsDescription(); }
 
 private:
 	/// @returns a specification of all named command-line options accepted by the compiler.
 	/// The object can be used to parse command-line arguments or to generate the help screen.
-	static boost::program_options::options_description optionsDescription(bool _forHelp = false);
+	static boost::program_options::options_description optionsDescription();
 
 	/// @returns a specification of all positional command-line arguments accepted by the compiler.
 	/// The object can be used to parse command-line arguments or to generate the help screen.
@@ -322,7 +324,11 @@ private:
 
 	void parseOutputSelection();
 
+	/// Returns a list of enabled options from @_optionList
+	std::vector<std::string> enabledOptions(std::vector<std::string> const& _optionList) const;
+
 	void checkMutuallyExclusive(std::vector<std::string> const& _optionNames);
+	void checkExperimental(std::vector<std::string> const& _optionNames) const;
 	size_t countEnabledOptions(std::vector<std::string> const& _optionNames) const;
 	static std::string joinOptionNames(std::vector<std::string> const& _optionNames, std::string _separator = ", ");
 

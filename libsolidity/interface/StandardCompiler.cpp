@@ -46,6 +46,8 @@
 #include <algorithm>
 #include <optional>
 
+#include <range/v3/algorithm/contains.hpp>
+
 using namespace solidity;
 using namespace solidity::yul;
 using namespace solidity::frontend;
@@ -298,10 +300,28 @@ bool isEthdebugRequested(Json const& _outputSelection)
 	if (!_outputSelection.is_object())
 		return false;
 
+	static std::array<std::string, 2> const ethdebugArtifacts{"evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug"};
+
 	for (auto const& fileRequests: _outputSelection)
 		for (auto const& requests: fileRequests)
 			for (auto const& request: requests)
-				if (request == "evm.bytecode.ethdebug" || request == "evm.deployedBytecode.ethdebug")
+				if (ranges::contains(ethdebugArtifacts, request.get<std::string>()))
+					return true;
+
+	return false;
+}
+
+bool isExperimentalArtifactRequested(Json const& _outputSelection)
+{
+	static std::array<std::string, 3> const experimentalArtifacts{"irAst", "irOptimizedAst", "yulCFGJson"};
+
+	if (isEthdebugRequested(_outputSelection))
+		return true;
+
+	for (auto const& fileRequests: _outputSelection)
+		for (auto const& requests: fileRequests)
+			for (auto const& request: requests)
+				if (ranges::contains(experimentalArtifacts, request.get<std::string>()))
 					return true;
 
 	return false;
@@ -430,7 +450,7 @@ std::optional<Json> checkAuxiliaryInputKeys(Json const& _input)
 
 std::optional<Json> checkSettingsKeys(Json const& _input)
 {
-	static std::set<std::string> keys{"debug", "evmVersion", "eofVersion", "libraries", "metadata", "modelChecker", "optimizer", "outputSelection", "remappings", "stopAfter", "viaIR"};
+	static std::set<std::string> keys{"debug", "evmVersion", "experimental", "eofVersion", "libraries", "metadata", "modelChecker", "optimizer", "outputSelection", "remappings", "stopAfter", "viaIR"};
 	return checkKeys(_input, keys, "settings");
 }
 
@@ -802,6 +822,13 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 
 	if (auto result = checkSettingsKeys(settings))
 		return *result;
+
+	if (settings.contains("experimental"))
+	{
+		if (!settings["experimental"].is_boolean())
+			return formatFatalError(Error::Type::JSONError, "'settings.experimental' must be a Boolean.");
+		ret.experimental = settings["experimental"].get<bool>();
+	}
 
 	if (settings.contains("stopAfter"))
 	{
@@ -1203,15 +1230,33 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 		}
 	}
 
-	if (
-		ret.debugInfoSelection.has_value() && ret.debugInfoSelection->ethdebug && (ret.language == "Solidity" || ret.language == "Yul") &&
-		!pipelineConfig(ret.outputSelection)[""][""].irCodegen && !isEthdebugRequested(ret.outputSelection)
-	)
-		return formatFatalError(Error::Type::FatalError, "'settings.debug.debugInfo' can only include 'ethdebug', if output 'ir', 'irOptimized', 'evm.bytecode.ethdebug', or 'evm.deployedBytecode.ethdebug' was selected.");
+	if (ret.debugInfoSelection.has_value() && ret.debugInfoSelection->ethdebug)
+	{
+		if (!ret.experimental)
+			return formatFatalError(Error::Type::FatalError, "Ethdebug annotations are experimental and can only be included in 'settings.debug.debugInfo' by enabling the 'settings.experimental' option.");
+		if (!pipelineConfig(ret.outputSelection)[""][""].irCodegen && !isEthdebugRequested(ret.outputSelection))
+			return formatFatalError(Error::Type::FatalError, "'settings.debug.debugInfo' can only include 'ethdebug', if output 'ir', 'irOptimized', 'evm.bytecode.ethdebug', or 'evm.deployedBytecode.ethdebug' was selected.");
+	}
 
 	if (isEthdebugRequested(ret.outputSelection))
 		if (ret.optimiserSettings.runYulOptimiser)
 			solUnimplemented("Optimization is not yet supported with ethdebug.");
+
+	if (!ret.experimental)
+	{
+		if (ret.language == "SolidityAST" || ret.language == "EVMAssembly")
+			return formatFatalError(Error::Type::FatalError, "'SolidityAST' and 'EVMAssembly' inputs are experimental and can only be used with the 'settings.experimental' option enabled.");
+
+		if (ret.evmVersion.isExperimental())
+			// TODO: Cover with test when the Amsterdam version is introduced
+			return formatFatalError(Error::Type::FatalError, fmt::format("EVM version '{}' is experimental and can only be used with the 'settings.experimental' option enabled.", ret.evmVersion.name()));
+
+		if (isExperimentalArtifactRequested(ret.outputSelection))
+			return formatFatalError(Error::Type::FatalError, "'irAst', 'irOptimizedAst', 'yulCFGJson', and 'ethdebug' outputs are experimental and can only be used with the 'settings.experimental' option enabled.");
+
+		if (ret.eofVersion.has_value())
+			return formatFatalError(Error::Type::FatalError, "'eofVersion' setting is experimental and can only be used with the 'settings.experimental' option enabled.");
+	}
 
 	return {std::move(ret)};
 }
@@ -1238,6 +1283,7 @@ Json StandardCompiler::importEVMAssembly(StandardCompiler::InputsAndSettings _in
 	solAssert(_inputsAndSettings.language == "EVMAssembly");
 	solAssert(_inputsAndSettings.sources.empty());
 	solAssert(_inputsAndSettings.jsonSources.size() == 1);
+	solAssert(_inputsAndSettings.experimental);
 
 	if (!isBinaryRequested(_inputsAndSettings.outputSelection))
 		return Json::object();
@@ -1373,6 +1419,7 @@ Json StandardCompiler::compileSolidity(StandardCompiler::InputsAndSettings _inpu
 	compilerStack.setMetadataHash(_inputsAndSettings.metadataHash);
 	compilerStack.selectContracts(pipelineConfig(_inputsAndSettings.outputSelection));
 	compilerStack.setModelCheckerSettings(_inputsAndSettings.modelCheckerSettings);
+	compilerStack.setExperimental(_inputsAndSettings.experimental);
 
 	Json errors = std::move(_inputsAndSettings.errors);
 
@@ -1772,7 +1819,10 @@ Json StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 				if (evmArtifactRequested(kind, "linkReferences"))
 					bytecodeJSON["linkReferences"] = formatLinkReferences(selectedObject.bytecode->linkReferences);
 				if (evmArtifactRequested(kind, "ethdebug"))
+				{
+					solAssert(_inputsAndSettings.experimental);
 					bytecodeJSON["ethdebug"] = selectedObject.ethdebug;
+				}
 				if (isDeployed && evmArtifactRequested(kind, "immutableReferences"))
 					bytecodeJSON["immutableReferences"] = formatImmutableReferences(selectedObject.bytecode->immutableReferences);
 				output["contracts"][sourceName][contractName]["evm"][kind] = bytecodeJSON;
@@ -1784,11 +1834,16 @@ Json StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 	if (isArtifactRequested(_inputsAndSettings.outputSelection, sourceName, contractName, "evm.assembly", wildcardMatchesExperimental))
 		output["contracts"][sourceName][contractName]["evm"]["assembly"] = object.assembly->assemblyString(stack.debugInfoSelection());
 	if (isArtifactRequested(_inputsAndSettings.outputSelection, sourceName, contractName, "yulCFGJson", wildcardMatchesExperimental))
+	{
+		solAssert(_inputsAndSettings.experimental, "");
 		output["contracts"][sourceName][contractName]["yulCFGJson"] = stack.cfgJson();
+	}
 
 	if (isEthdebugRequested(_inputsAndSettings.outputSelection))
+	{
+		solAssert(_inputsAndSettings.experimental, "");
 		output["ethdebug"] = evmasm::ethdebug::resources({sourceName}, VersionString);
-
+	}
 	return output;
 }
 
