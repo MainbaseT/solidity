@@ -369,6 +369,9 @@ Input Description
         // Optional: Change compilation pipeline to go through the Yul intermediate representation.
         // This is false by default.
         "viaIR": true,
+        // Optional: Turn on SSA CFG-based code generation via the IR (experimental).
+        // Implies viaIR: true. This is false by default.
+        "viaSSACFG": false,
         // Optional: Debugging settings
         "debug": {
           // How to treat revert (and require) reason strings. Settings are
@@ -766,7 +769,7 @@ The table below details all currently available experimental features.
 +-----------------------+--------------------------+------------------+-------------------------------------------------------------------+
 | Ethdebug              | ``ethdebug``             | no               | ``--ethdebug``, ``--ethdebug-runtime``, ``--debug-info ethdebug`` |
 +-----------------------+--------------------------+------------------+-------------------------------------------------------------------+
-| Yul SSA CFG exporter  | ``ssa-cfg``              | no               | ``--yul-cfg-json``                                                |
-+-----------------------+--------------------------+------------------+-------------------------------------------------------------------+
-| SSA CFG codegen       | ``ssa-cfg-codegen``      | yes              | ``--via-ssa-cfg``, ``settings.viaSSACFG``                         |
+|                       |                          | no               | ``--yul-cfg-json``                                                |
+| SSA CFG               + ``ssa-cfg``              +------------------+-------------------------------------------------------------------+
+|                       |                          | yes              | ``--via-ssa-cfg``                                                 |
 +-----------------------+--------------------------+------------------+-------------------------------------------------------------------+

@@ -89,6 +89,7 @@ private:
 		Json outputSelection;
 		ModelCheckerSettings modelCheckerSettings = ModelCheckerSettings{};
 		bool viaIR = false;
+		bool viaSSACFG = false;
 		bool experimental = false;
 	};
 
