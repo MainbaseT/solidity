@@ -780,6 +780,9 @@ CompilerStack::PipelineConfig CompilerStack::requestedPipelineConfig(ContractDef
 bool CompilerStack::compile(State _stopAfter)
 {
 	m_stopAfter = _stopAfter;
+
+	solAssert(!m_viaSSACFG || m_experimental, "SSA CFG code generation is an experimental feature. It requires experimental mode to be enabled.");
+
 	if (m_stackState < AnalysisSuccessful)
 		if (!parseAndAnalyze(_stopAfter))
 			return false;

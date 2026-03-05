@@ -176,6 +176,7 @@ contract DepositContract is IDepositContract, ERC165 {
 }
 // ====
 // compileViaSSACFG: true
+// experimental: true
 // ----
 // constructor()
 // gas irOptimized: 809570
