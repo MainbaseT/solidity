@@ -32,10 +32,18 @@ class StackLayoutGenerator
 {
 public:
 	using Slot = StackSlot;
-	static SSACFGStackLayout generate(LivenessAnalysis const& _liveness, CallSites const& _callSites);
+	static SSACFGStackLayout generate(
+		LivenessAnalysis const& _liveness,
+		CallSites const& _callSites,
+		ControlFlow::FunctionGraphID _graphID
+	);
 
 private:
-	explicit StackLayoutGenerator(LivenessAnalysis const& _liveness, CallSites const& _callSites);
+	explicit StackLayoutGenerator(
+		LivenessAnalysis const& _liveness,
+		CallSites const& _callSites,
+		ControlFlow::FunctionGraphID _graphID
+	);
 
 	void defineStackIn(SSACFG::BlockId const& _blockId);
 	void visitBlock(SSACFG::BlockId const& _blockId);

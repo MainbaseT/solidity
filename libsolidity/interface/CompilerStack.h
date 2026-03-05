@@ -223,6 +223,10 @@ public:
 	/// Must be set before parsing.
 	void setViaIR(bool _viaIR);
 
+	/// Sets the pipeline to use the SSA CFG code generator instead of OptimizedEVMCodeTransform.
+	/// Must be set before compilation.
+	void setViaSSACFG(bool _viaSSACFG);
+
 	/// Sets the experimental toggle to allow usage of experimental features.
 	void setExperimental(bool _experimental);
 
@@ -610,6 +614,7 @@ private:
 	RevertStrings m_revertStrings = RevertStrings::Default;
 	State m_stopAfter = State::CompilationSuccessful;
 	bool m_viaIR = false;
+	bool m_viaSSACFG = false;
 	bool m_experimental = false;
 	langutil::EVMVersion m_evmVersion;
 	std::optional<uint8_t> m_eofVersion;
