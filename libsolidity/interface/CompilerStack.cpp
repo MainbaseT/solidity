@@ -1842,6 +1842,8 @@ std::string CompilerStack::createMetadata(Contract const& _contract, bool _forIR
 		meta["settings"]["experimental"] = m_experimental;
 	if (m_eofVersion.has_value())
 		meta["settings"]["eofVersion"] = *m_eofVersion;
+	if (m_viaSSACFG)
+		meta["settings"]["viaSSACFG"] = m_viaSSACFG;
 	meta["settings"]["compilationTarget"][_contract.contract->sourceUnitName()] =
 		*_contract.contract->annotation().canonicalName;
 
