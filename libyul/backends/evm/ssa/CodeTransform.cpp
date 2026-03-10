@@ -107,7 +107,7 @@ CodeTransform::CodeTransform(
 	SSACFG const& _cfg,
 	SSACFGStackLayout const& _stackLayout,
 	Scope::Function const* _function,
-	ControlFlow::FunctionGraphID
+	ControlFlow::FunctionGraphID _graphID
 ):
 	m_assembly(_assembly),
 	m_builtinContext(_builtinContext),
@@ -115,6 +115,7 @@ CodeTransform::CodeTransform(
 	m_callSites(_callSites),
 	m_cfg(_cfg),
 	m_stackLayout(_stackLayout),
+	m_graphID(_graphID),
 	m_blockIsTransformed(_cfg.numBlocks(), false),
 	m_blockLabels([this] {
 		std::vector<AbstractAssembly::LabelID> blockLabels;
@@ -142,10 +143,12 @@ CodeTransform::CodeTransform(
 		auto const findIt = m_functionLabels.find(_function);
 		yulAssert(findIt != m_functionLabels.end());
 		m_assembly.appendLabel(findIt->second);
-		m_assembly.setStackHeight(static_cast<int>(_function->numArguments));
+		m_assembly.setStackHeight(static_cast<int>(_function->numArguments) + (m_cfg.canContinue ? 1 : 0));
 	}
 	StackData expectedStackTop;
-	expectedStackTop.reserve(m_cfg.arguments.size());
+	expectedStackTop.reserve(m_cfg.arguments.size() + (m_cfg.function && m_cfg.canContinue ? 1 : 0));
+		if (m_cfg.function && m_cfg.canContinue)
+			expectedStackTop.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
 	for (auto const& [_, valueID]: m_cfg.arguments | ranges::views::reverse)
 		expectedStackTop.push_back(StackSlot::makeValueID(valueID));
 	assertLayoutCompatibility(m_stack.data(), expectedStackTop);
@@ -339,35 +342,38 @@ void CodeTransform::operator()(SSACFG::BlockId const& _currentBlock, SSACFG::Bas
 void CodeTransform::operator()(SSACFG::BlockId const&, SSACFG::BasicBlock::FunctionReturn const& _functionReturn)
 {
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
+	// Each CodeTransform instance handles exactly one function's CFG, so a FunctionReturn exit
+	// here necessarily belongs to m_cfg.function. No identity cross-check is needed.
 	yulAssert(m_cfg.function);
-	// The return label sits physically below the tracked virtual stack.
-	// Inform the assembler so SWAP can reach it.
-	m_assembly.setStackHeight(m_assembly.stackHeight() + 1);
-	// Build target: [rv1, rv2, ..., rvN-1, rv0] (rv0 at top).
-	// After shuffle: EVM = [label, rv1, ..., rvN-1, rv0].
-	// After SWAP(N):  EVM = [rv0, rv1, ..., rvN-1, label].
-	// After JUMP:     EVM = [rv0, rv1, ..., rvN-1].
-	// TODO: it would be better to account for function return labels from the entry of the function to the end symbolically
-	StackData returnTarget;
-	if (!_functionReturn.returnValues.empty())
+	yulAssert(m_cfg.canContinue);
+	yulAssert(m_stack.size() == _functionReturn.returnValues.size() + 1, "There must be at least the function return label element on stack");
+	yulAssert(m_stack.top().isFunctionReturnLabel());
+	yulAssert(m_stack.top().functionReturnLabel() == m_graphID);
+	for (std::size_t i = 0; i < _functionReturn.returnValues.size(); ++i)
 	{
-		returnTarget.reserve(_functionReturn.returnValues.size());
-		for (std::size_t i = 1; i < _functionReturn.returnValues.size(); ++i)
-			returnTarget.push_back(StackSlot::makeValueID(_functionReturn.returnValues[i]));
-		returnTarget.push_back(StackSlot::makeValueID(_functionReturn.returnValues.front()));
-		StackShuffler<AssemblyCallbacks>::shuffle(m_stack, returnTarget, {}, returnTarget.size());
-		m_assembly.appendInstruction(evmasm::swapInstruction(
-			static_cast<unsigned>(_functionReturn.returnValues.size())
-		));
+		auto const& returnValueSlot = m_stack.slot(StackOffset{i});
+		yulAssert(returnValueSlot.isValueID());
+		yulAssert(returnValueSlot.valueID() == _functionReturn.returnValues[i]);
 	}
-	else
-		StackShuffler<AssemblyCallbacks>::shuffle(m_stack, returnTarget, {}, 0);
 	m_assembly.appendJump(0, AbstractAssembly::JumpType::OutOfFunction);
 }
 
-void CodeTransform::operator()(SSACFG::BlockId const&, SSACFG::BasicBlock::Terminated const&)
+void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlock::Terminated const&)
 {
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
+	auto const& block = m_cfg.block(_blockId);
+	yulAssert(!block.operations.empty(), "Terminated block must have at least one operation.");
+	std::visit(util::GenericVisitor{
+		[](SSACFG::BuiltinCall const& _builtin) {
+			yulAssert(_builtin.builtin.get().controlFlowSideEffects.terminatesOrReverts(), "Last operation of Terminated block must terminate or revert.");
+		},
+		[](SSACFG::Call const& _call) {
+			yulAssert(!_call.canContinue, "Last operation of Terminated block must be a non-continuable call.");
+		},
+		[](SSACFG::LiteralAssignment const&) {
+			yulAssert(false, "Terminated block cannot end with a literal assignment.");
+		}
+	}, block.operations.back().kind);
 	// To be sure just emit another INVALID - should be removed by optimizer.
 	m_assembly.appendInstruction(evmasm::Instruction::INVALID);
 }
