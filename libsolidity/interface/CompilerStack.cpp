@@ -379,7 +379,7 @@ bool CompilerStack::parse()
 
 		for (size_t i = 0; i < sourcesToParse.size(); ++i)
 		{
-			std::string const& path = sourcesToParse[i];
+			std::string const path = sourcesToParse[i];
 			Source& source = m_sources[path];
 			source.ast = parser.parse(*source.charStream);
 			if (!source.ast)
