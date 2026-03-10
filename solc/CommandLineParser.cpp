@@ -624,7 +624,7 @@ General Information)").c_str(),
 		)
 		(
 			g_strViaIR.c_str(),
-			"Turn on compilation mode via the IR."
+			"Turn on compilation via IR."
 		)
 		(
 			g_strViaSSACFG.c_str(),
