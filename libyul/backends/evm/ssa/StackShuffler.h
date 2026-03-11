@@ -394,7 +394,7 @@ private:
 			return false;
 
 		// if we have at least one slot in the args section, try to fix something there
-		if (!_stack.empty() && _stack.size() >= _state.target().tailSize)
+		if (_stack.size() > _state.target().tailSize)
 		{
 			StackOffset const stackTop{_stack.size() - 1};
 			// if the stack top isn't where it likes to be right now, try to put it somewhere more sensible
