@@ -450,7 +450,7 @@ std::optional<Json> checkAuxiliaryInputKeys(Json const& _input)
 
 std::optional<Json> checkSettingsKeys(Json const& _input)
 {
-	static std::set<std::string> keys{"debug", "evmVersion", "experimental", "eofVersion", "libraries", "metadata", "modelChecker", "optimizer", "outputSelection", "remappings", "stopAfter", "viaIR"};
+	static std::set<std::string> keys{"debug", "evmVersion", "experimental", "eofVersion", "libraries", "metadata", "modelChecker", "optimizer", "outputSelection", "remappings", "stopAfter", "viaIR", "viaSSACFG"};
 	return checkKeys(_input, keys, "settings");
 }
 
@@ -848,6 +848,22 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 		ret.viaIR = settings["viaIR"].get<bool>();
 	}
 
+	if (settings.contains("viaSSACFG"))
+	{
+		if (!settings["viaSSACFG"].is_boolean())
+			return formatFatalError(Error::Type::JSONError, "\"settings.viaSSACFG\" must be a Boolean.");
+		ret.viaSSACFG = settings["viaSSACFG"].get<bool>();
+		if (ret.viaSSACFG)
+		{
+			if (settings.contains("viaIR") && !ret.viaIR)
+				return formatFatalError(
+					Error::Type::JSONError,
+					"\"settings.viaSSACFG\" requires compilation via IR."
+				);
+			ret.viaIR = true;
+		}
+	}
+
 	if (settings.contains("evmVersion"))
 	{
 		if (!settings["evmVersion"].is_string())
@@ -1239,8 +1255,12 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 	}
 
 	if (isEthdebugRequested(ret.outputSelection))
+	{
 		if (ret.optimiserSettings.runYulOptimiser)
 			solUnimplemented("Optimization is not yet supported with ethdebug.");
+		if (ret.viaSSACFG)
+			solUnimplemented("SSA CFG codegen does not yet support ethdebug.");
+	}
 
 	if (!ret.experimental)
 	{
@@ -1256,6 +1276,9 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 
 		if (ret.eofVersion.has_value())
 			return formatFatalError(Error::Type::FatalError, "'eofVersion' setting is experimental and can only be used with the 'settings.experimental' option enabled.");
+
+		if (ret.viaSSACFG)
+			return formatFatalError(Error::Type::FatalError, "'viaSSACFG' setting is experimental and can only be used with the 'settings.experimental' option enabled.");
 	}
 
 	return {std::move(ret)};
@@ -1406,6 +1429,7 @@ Json StandardCompiler::compileSolidity(StandardCompiler::InputsAndSettings _inpu
 	for (auto const& smtLib2Response: _inputsAndSettings.smtLib2Responses)
 		compilerStack.addSMTLib2Response(smtLib2Response.first, smtLib2Response.second);
 	compilerStack.setViaIR(_inputsAndSettings.viaIR);
+	compilerStack.setViaSSACFG(_inputsAndSettings.viaSSACFG);
 	compilerStack.setEVMVersion(_inputsAndSettings.evmVersion);
 	compilerStack.setEOFVersion(_inputsAndSettings.eofVersion);
 	compilerStack.setRemappings(std::move(_inputsAndSettings.remappings));
@@ -1763,7 +1787,7 @@ Json StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 			output["sources"][sourceName] = sourceResult;
 		}
 		stack.optimize();
-		std::tie(object, deployedObject) = stack.assembleWithDeployed();
+		std::tie(object, deployedObject) = stack.assembleWithDeployed({}, _inputsAndSettings.viaSSACFG);
 		if (object.bytecode)
 			object.bytecode->link(_inputsAndSettings.libraries);
 		if (deployedObject.bytecode)

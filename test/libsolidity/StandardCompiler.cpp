@@ -2347,6 +2347,32 @@ BOOST_AUTO_TEST_CASE(experimental_non_boolean)
 	BOOST_CHECK(containsError(result, "JSONError", "'settings.experimental' must be a Boolean."));
 }
 
+BOOST_AUTO_TEST_CASE(via_ssa_cfg_with_experimental)
+{
+	frontend::StandardCompiler compiler;
+	static auto constexpr input = R"(
+	{
+		"language": "Solidity",
+		"sources": {
+			"A.sol": {
+				"content": "// SPDX-License-Identifier: GPL-2.0\npragma solidity >=0.0;\ncontract A { function f() public pure returns (uint) { return 1; } }"
+			}
+		},
+		"settings": {
+			"experimental": true,
+			"viaSSACFG": true,
+			"outputSelection": {"*": {"*": ["evm.bytecode"]}}
+		}
+	}
+	)";
+
+	Json parsedInput;
+	BOOST_REQUIRE(util::jsonParseStrict(input, parsedInput));
+	Json result = compiler.compile(parsedInput);
+	// Should compile without fatal errors (warnings are acceptable)
+	BOOST_CHECK(!containsError(result, "FatalError", ""));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 } // end namespaces
