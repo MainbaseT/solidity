@@ -347,6 +347,12 @@ private:
 			}
 			else
 			{
+				// even if it is not dup reachable, it still might be swappable
+				if (_stack.swapReachable(sourceOffset) && _state.isSafeToSwapWithTop(sourceOffset))
+				{
+					_stack.swap(sourceOffset);
+					return true;
+				}
 				// the slot we need something in the args region of is unreachable, try compressing the stack,
 				// first looking at the top
 				if (shrinkStack(_stack, _state))
