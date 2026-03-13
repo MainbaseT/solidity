@@ -1365,9 +1365,7 @@ void CommandLineParser::processArgs()
 		}
 
 		// switch to assembly mode
-		using Input = yul::YulStack::Language;
 		using Machine = yul::YulStack::Machine;
-		m_options.assembly.inputLanguage = Input::StrictAssembly;
 
 		if (m_args.count(g_strMachine))
 		{
@@ -1377,30 +1375,15 @@ void CommandLineParser::processArgs()
 			else
 				solThrow(CommandLineValidationError, "Invalid option for --" + g_strMachine + ": " + machine);
 		}
-		if (m_args.count(g_strYulDialect))
+		if (m_args.contains(g_strYulDialect))
 		{
-			std::string dialect = m_args[g_strYulDialect].as<std::string>();
-			if (dialect == g_strEVM)
-				m_options.assembly.inputLanguage = Input::StrictAssembly;
-			else
+			auto const& dialect = m_args[g_strYulDialect].as<std::string>();
+			if (dialect != g_strEVM)
 				solThrow(CommandLineValidationError, "Invalid option for --" + g_strYulDialect + ": " + dialect);
 		}
-		if (
-				(m_options.optimizer.optimizeEvmasm || m_options.optimizer.optimizeYul) &&
-				m_options.assembly.inputLanguage != Input::StrictAssembly
-			)
-			solThrow(
-				CommandLineValidationError,
-				"Optimizer can only be used for strict assembly. Use --"  + g_strStrictAssembly + "."
-			);
 
 		m_options.output.viaSSACFG = m_args.contains(g_strViaSSACFG);
-		if (m_options.output.viaSSACFG)
-			if (m_options.assembly.inputLanguage != Input::StrictAssembly)
-				solThrow(
-					CommandLineValidationError,
-					"--" + g_strViaSSACFG + " can only be used with strict assembly. Use --" + g_strStrictAssembly + "."
-				);
+
 		if (m_options.compiler.outputs.ethdebug || m_options.compiler.outputs.ethdebugRuntime)
 		{
 			if (m_options.output.viaSSACFG)

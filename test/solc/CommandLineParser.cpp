@@ -274,13 +274,13 @@ BOOST_AUTO_TEST_CASE(via_ir_options)
 
 BOOST_AUTO_TEST_CASE(assembly_mode_options)
 {
-	static std::vector<std::tuple<std::vector<std::string>, YulStack::Machine, YulStack::Language>> const allowedCombinations = {
-		{{"--machine=evm", "--yul-dialect=evm", "--strict-assembly"}, YulStack::Machine::EVM, YulStack::Language::StrictAssembly},
-		{{"--machine=evm", "--strict-assembly"}, YulStack::Machine::EVM, YulStack::Language::StrictAssembly},
-		{{"--strict-assembly"}, YulStack::Machine::EVM, YulStack::Language::StrictAssembly},
+	static std::vector<std::tuple<std::vector<std::string>, YulStack::Machine>> const allowedCombinations = {
+		{{"--machine=evm", "--yul-dialect=evm", "--strict-assembly"}, YulStack::Machine::EVM},
+		{{"--machine=evm", "--strict-assembly"}, YulStack::Machine::EVM},
+		{{"--strict-assembly"}, YulStack::Machine::EVM},
 	};
 
-	for (auto const& [assemblyOptions, expectedMachine, expectedLanguage]: allowedCombinations)
+	for (auto const& [assemblyOptions, expectedMachine]: allowedCombinations)
 	{
 		std::vector<std::string> commandLine = {
 			"solc",
@@ -314,16 +314,13 @@ BOOST_AUTO_TEST_CASE(assembly_mode_options)
 			"--bin",
 			"--ir-optimized",
 			"--ast-compact-json",
+			"--experimental",
+			"--optimize",
+			"--optimize-runs=1000",
+			"--yul-optimizations=agf",
+			"--via-ssa-cfg",
 		};
 		commandLine += assemblyOptions;
-		if (expectedLanguage == YulStack::Language::StrictAssembly)
-			commandLine += std::vector<std::string>{
-				"--experimental",
-				"--optimize",
-				"--optimize-runs=1000",
-				"--yul-optimizations=agf",
-				"--via-ssa-cfg",
-			};
 
 		CommandLineOptions expectedOptions;
 		expectedOptions.input.mode = InputMode::Assembler;
@@ -345,7 +342,6 @@ BOOST_AUTO_TEST_CASE(assembly_mode_options)
 		expectedOptions.output.debugInfoSelection = DebugInfoSelection::fromString("location");
 		expectedOptions.formatting.json = JsonFormat {JsonFormat::Pretty, 1};
 		expectedOptions.assembly.targetMachine = expectedMachine;
-		expectedOptions.assembly.inputLanguage = expectedLanguage;
 		expectedOptions.linker.libraries = {
 			{"dir1/file1.sol:L", h160("1234567890123456789012345678901234567890")},
 			{"dir2/file2.sol:L", h160("1111122222333334444455555666667777788888")},
@@ -357,15 +353,12 @@ BOOST_AUTO_TEST_CASE(assembly_mode_options)
 		expectedOptions.compiler.outputs.binary = true;
 		expectedOptions.compiler.outputs.irOptimized = true;
 		expectedOptions.compiler.outputs.astCompactJson = true;
-		if (expectedLanguage == YulStack::Language::StrictAssembly)
-		{
-			expectedOptions.experimental = true;
-			expectedOptions.optimizer.optimizeEvmasm = true;
-			expectedOptions.optimizer.optimizeYul = true;
-			expectedOptions.optimizer.yulSteps = "agf";
-			expectedOptions.optimizer.expectedExecutionsPerDeployment = 1000;
-			expectedOptions.output.viaSSACFG = true;
-		}
+		expectedOptions.experimental = true;
+		expectedOptions.optimizer.optimizeEvmasm = true;
+		expectedOptions.optimizer.optimizeYul = true;
+		expectedOptions.optimizer.yulSteps = "agf";
+		expectedOptions.optimizer.expectedExecutionsPerDeployment = 1000;
+		expectedOptions.output.viaSSACFG = true;
 
 		CommandLineOptions parsedOptions = parseCommandLine(commandLine);
 

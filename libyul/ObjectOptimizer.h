@@ -32,13 +32,6 @@
 namespace solidity::yul
 {
 
-enum class Language
-{
-	StrictAssembly
-};
-
-Dialect const& languageToDialect(Language _language, langutil::EVMVersion _version, std::optional<uint8_t> _eofVersion);
-
 /// Encapsulates logic for applying @a yul::OptimiserSuite to a whole hierarchy of Yul objects.
 /// Also, acts as a transparent cache for optimized objects.
 ///
@@ -55,7 +48,6 @@ public:
 	/// must uniquely determine the result of optimization.
 	struct Settings
 	{
-		Language language;
 		langutil::EVMVersion evmVersion;
 		std::optional<uint8_t> eofVersion;
 		bool optimizeStackAllocation;
