@@ -631,11 +631,6 @@ General Information)").c_str(),
 			"If not specified, non-EOF bytecode will be generated."
 		)
 		(
-			g_strYul.c_str(),
-			"(disabled) Switch to typed Yul mode. The typed Yul dialect is no longer supported. "
-			"For regular Yul compilation use --strict-assembly instead."
-		)
-		(
 			g_strExperimentalViaIR.c_str(),
 			"Deprecated synonym of --via-ir."
 		)
@@ -680,13 +675,6 @@ General Information)").c_str(),
 			g_strLink.c_str(),
 			("Switch to linker mode, ignoring all options apart from --" + g_strLibraries + " "
 			"and modify binaries in place.").c_str()
-		)
-		(
-			g_strAssemble.c_str(),
-			fmt::format(
-				"(disabled) Switch to assembly mode and assume input is assembly. No longer supported. Use --{} instead.",
-				g_strStrictAssembly
-			).c_str()
 		)
 		(
 			g_strStrictAssembly.c_str(),
@@ -970,6 +958,12 @@ po::positional_options_description CommandLineParser::positionalOptionsDescripti
 void CommandLineParser::parseArgs(int _argc, char const* const* _argv)
 {
 	po::options_description allOptions = optionsDescription();
+	// Disabled options: still accepted for parsing so that we can produce a proper error message,
+	// but hidden from --help output.
+	allOptions.add_options()
+		(g_strAssemble.c_str(), "")
+		(g_strYul.c_str(), "")
+	;
 	po::positional_options_description filesPositions = positionalOptionsDescription();
 
 	m_options = {};
