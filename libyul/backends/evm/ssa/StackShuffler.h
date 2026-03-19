@@ -85,6 +85,8 @@ public:
 	bool targetArbitrary(StackOffset _targetOffset) const;
 	/// Yields whether two slots on the current stack are same, respecting stack size limits
 	bool isSourceCompatible(StackOffset _sourceOffset1, StackOffset _sourceOffset2) const;
+	/// Checks if swapping the current offset with top makes progress toward target
+	bool isSafeToSwapWithTop(StackOffset _offset) const;
 	/// Shuffling target information
 	Target const& target() const;
 
@@ -314,73 +316,49 @@ private:
 			// no need to dup deep junk
 			if (endangeredSlot.isJunk())
 				continue;
-			// check if we have more of the same slot further up in the stack
 			bool const neededInArgs = _state.targetArgsCount(endangeredSlot) > _state.countInArgs(endangeredSlot);
 			bool const needMore = _state.targetMinCount(endangeredSlot) > _state.count(endangeredSlot);
-			if (neededInArgs || needMore)
+			if (!neededInArgs && !needMore)
+				continue;
+			// if we ever need more of a slot then this can only happen if it is something we require in the arguments
+			yulAssert(_state.requiredInArgs(endangeredSlot));
+			// if there's a shallower slot with the same info that is reachable, skip this one
+			std::optional<StackDepth> depth = _stack.findSlotDepth(endangeredSlot);
+			yulAssert(depth);
+			bool const haveMoreAbove = *depth < _stack.offsetToDepth(sourceOffset);
+			if (haveMoreAbove)
+				continue;
+
+			if (_stack.dupReachable(sourceOffset))
 			{
-				// if we ever need more of a slot then this can only happen if it is something we require
-				// in the arguments
-				yulAssert(_state.requiredInArgs(endangeredSlot));
-
-				auto const haveMoreAbove = [&]
+				// if we can safely swap the current stack top with the endangered slot, we do that instead of DUP
+				if (_state.isSafeToSwapWithTop(sourceOffset))
 				{
-					for (StackOffset offset{sourceOffset.value + 1}; offset < _stack.size(); ++offset.value)
-					{
-						if (_stack[offset] == endangeredSlot)
-							return true;
-					}
-					return false;
-				}();
-
-				// if we have more of the same further above, just unconditionally skip this one
-				if (haveMoreAbove)
-					continue;
-
-				if (_stack.dupReachable(sourceOffset))
-				{
-
-					// if we can safely swap the current stack top with the endangered slot, we do that instead of DUP
-					if (
-						!_state.isArgsCompatible(sourceOffset, sourceOffset) && // the offset isn't already in the right position wrt args
-						!_state.isArgsCompatible(StackOffset{_stack.size() - 1}, StackOffset{_stack.size() - 1}) && // the top isn't already in the right position wrt args
-						(
-							!_state.requiredInArgs(_stack.top()) || // current top can go into tail, ie it's not required as arg or
-							_state.countReachable(_stack.top()) > 1 // there's more of it in reachable stack depth
-						) &&
-						(
-							_state.target().tailSize <= sourceOffset.value ||  // sourceOffset not in tail
-							!_state.requiredInTail(endangeredSlot) ||  // we're in tail but sourceOffset not needed in tail
-							(_state.countInTail(endangeredSlot) > 1 && _state.requiredInTail(endangeredSlot))  // swapping source offset away from tail doesn't decrease tail correctness
-						)
-					)
-					{
-						// top can go into the tail bit, swap it down
-						_stack.swap(sourceOffset);
-						return true;
-					}
-					else
-					{
-						// we need more of the slot that is about to go out of reach, dup it
-						_stack.dup(sourceOffset);
-						return true;
-					}
+					// top can go into the tail bit, swap it down
+					_stack.swap(sourceOffset);
+					return true;
 				}
 				else
 				{
-					std::optional<StackDepth> depth = _stack.findSlotDepth(_stack[sourceOffset]);
-					yulAssert(depth);
-					// if there's a shallower slot with the same info that is reachable, skip this one
-					if (*depth < _stack.offsetToDepth(sourceOffset))
-						continue;
-
-					// the slot we need something in the args region of is unreachable, try compressing the stack,
-					// first looking at the top
-					if (shrinkStack(_stack, _state))
-						return true;
-
-					yulAssert(false, fmt::format("Stack too deep, can't reach slot at depth {}", depth->value));
+					// we need more of the slot that is about to go out of reach, dup it
+					_stack.dup(sourceOffset);
+					return true;
 				}
+			}
+			else
+			{
+				// even if it is not dup reachable, it still might be swappable
+				if (_stack.swapReachable(sourceOffset) && _state.isSafeToSwapWithTop(sourceOffset))
+				{
+					_stack.swap(sourceOffset);
+					return true;
+				}
+				// the slot we need something in the args region of is unreachable, try compressing the stack,
+				// first looking at the top
+				if (shrinkStack(_stack, _state))
+					return true;
+
+				yulAssert(false, fmt::format("Stack too deep, can't reach slot at depth {}", depth->value));
 			}
 		}
 		return false;
