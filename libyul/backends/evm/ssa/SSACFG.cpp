@@ -156,7 +156,7 @@ private:
 
 }
 
-std::string SSACFG::ValueId::str(SSACFG const& _cfg) const
+std::string ValueId::str(SSACFG const& _cfg) const
 {
 	if (!hasValue())
 		return "INVALID";
