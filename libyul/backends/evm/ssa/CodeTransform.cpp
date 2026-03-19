@@ -171,7 +171,7 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 
 	for (std::size_t operationIndex = 0; operationIndex < block.operations.size(); ++operationIndex)
 	{
-		SSACFG::Operation const& operation = block.operations[operationIndex];
+		SSACFG::Operation const& operation = m_cfg.operation(block.operations[operationIndex]);
 		auto const& operationInLayout = blockLayout->operationIn[operationIndex];
 
 		// perform the operation
@@ -373,7 +373,7 @@ void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlo
 		[](SSACFG::LiteralAssignment const&) {
 			yulAssert(false, "Terminated block cannot end with a literal assignment.");
 		}
-	}, block.operations.back().kind);
+	}, m_cfg.operation(block.operations.back()).kind);
 	// To be sure just emit another INVALID - should be removed by optimizer.
 	m_assembly.appendInstruction(evmasm::Instruction::INVALID);
 }

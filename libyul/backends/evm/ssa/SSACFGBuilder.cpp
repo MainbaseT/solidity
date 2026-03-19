@@ -129,8 +129,8 @@ SSACFG::ValueId SSACFGBuilder::tryRemoveTrivialPhi(SSACFG::ValueId _phi)
 			if (usedInPhi)
 				phiUses.push_back(blockPhi);
 		}
-		for (auto& op: block.operations)
-			ranges::replace(op.inputs, _phi, same);
+		for (auto opId: block.operations)
+			ranges::replace(m_graph.operation(opId).inputs, _phi, same);
 		std::visit(util::GenericVisitor{
 			[_phi, same](SSACFG::BasicBlock::FunctionReturn& _functionReturn) {
 				ranges::replace(_functionReturn.returnValues,_phi, same);
@@ -339,7 +339,7 @@ void SSACFGBuilder::operator()(Switch const& _switch)
 			{*_case.value /* skip second argument */ }
 		});
 		auto outputValue = m_graph.newVariable(m_currentBlock);
-		currentBlock().operations.emplace_back(SSACFG::Operation{
+		auto opId = m_graph.makeOperation(SSACFG::Operation{
 			{outputValue},
 			SSACFG::BuiltinCall{
 				debugDataOf(_case),
@@ -348,6 +348,7 @@ void SSACFGBuilder::operator()(Switch const& _switch)
 			},
 			{m_graph.newLiteral(debugDataOf(_case), _case.value->value.value()), expression}
 		});
+		currentBlock().operations.emplace_back(opId);
 		return outputValue;
 	};
 
@@ -534,8 +535,9 @@ void SSACFGBuilder::assign(std::vector<std::reference_wrapper<Scope::Variable co
 				.kind = SSACFG::LiteralAssignment{},
 				.inputs = {value}
 			};
-			currentBlock().operations.emplace_back(assignment);
-			writeVariable(var, m_currentBlock, assignment.outputs.back());
+			auto opId = m_graph.makeOperation(std::move(assignment));
+			currentBlock().operations.emplace_back(opId);
+			writeVariable(var, m_currentBlock, m_graph.operation(opId).outputs.back());
 		}
 		else
 			writeVariable(var, m_currentBlock, value);
@@ -575,7 +577,7 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 		}
 	}, _call.functionName);
 	auto results = operation.outputs;
-	currentBlock().operations.emplace_back(std::move(operation));
+	currentBlock().operations.emplace_back(m_graph.makeOperation(std::move(operation)));
 	if (!canContinue)
 	{
 		currentBlock().exit = SSACFG::BasicBlock::Terminated{};

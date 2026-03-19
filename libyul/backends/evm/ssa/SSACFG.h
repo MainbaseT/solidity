@@ -56,6 +56,13 @@ public:
 		bool hasValue() const { return value != std::numeric_limits<ValueType>::max(); }
 		auto operator<=>(BlockId const&) const = default;
 	};
+	struct OperationId
+	{
+		using ValueType = std::uint32_t;
+		ValueType value = std::numeric_limits<ValueType>::max();
+		bool hasValue() const { return value != std::numeric_limits<ValueType>::max(); }
+		auto operator<=>(OperationId const&) const = default;
+	};
 	class ValueId
 	{
 	public:
@@ -144,7 +151,7 @@ public:
 		langutil::DebugData::ConstPtr debugData;
 		std::set<BlockId> entries;
 		std::set<ValueId> phis;
-		std::vector<Operation> operations;
+		std::vector<OperationId> operations;
 		std::variant<MainExit, Jump, ConditionalJump, FunctionReturn, Terminated> exit = MainExit{};
 		template<typename Callable>
 		void forEachExit(Callable&& _callable) const
@@ -188,8 +195,18 @@ public:
 	BasicBlock const& block(BlockId _id) const { return m_blocks.at(_id.value); }
 	size_t numBlocks() const { return m_blocks.size(); }
 
+	OperationId makeOperation(Operation _op)
+	{
+		OperationId id{static_cast<OperationId::ValueType>(m_operations.size())};
+		m_operations.emplace_back(std::move(_op));
+		return id;
+	}
+	Operation& operation(OperationId _id) { return m_operations.at(_id.value); }
+	Operation const& operation(OperationId _id) const { return m_operations.at(_id.value); }
+
 private:
 	std::vector<BasicBlock> m_blocks;
+	std::vector<Operation> m_operations;
 public:
 	struct LiteralValue {
 		langutil::DebugData::ConstPtr debugData;
@@ -315,6 +332,20 @@ struct fmt::formatter<solidity::yul::ssa::SSACFG::BlockId>
 		if (!_blockId.hasValue())
 			return fmt::format_to(_ctx.out(), "empty");
 		return fmt::format_to(_ctx.out(), "{}", _blockId.value);
+	}
+};
+
+template<>
+struct fmt::formatter<solidity::yul::ssa::SSACFG::OperationId>
+{
+	static auto constexpr parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return ctx.begin(); }
+
+	template<typename FormatContext>
+	auto format(solidity::yul::ssa::SSACFG::OperationId const& _opId, FormatContext& _ctx) const -> decltype(_ctx.out())
+	{
+		if (!_opId.hasValue())
+			return fmt::format_to(_ctx.out(), "empty");
+		return fmt::format_to(_ctx.out(), "op{}", _opId.value);
 	}
 };
 
