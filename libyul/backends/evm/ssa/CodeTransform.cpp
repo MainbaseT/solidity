@@ -87,12 +87,17 @@ CodeTransform::FunctionLabels CodeTransform::registerFunctionLabels(
 		if (!_function)
 			continue;
 		bool nameAlreadySeen = !assignedFunctionNames.insert(_function->name).second;
+		auto const sourceID = [&]() -> std::optional<std::size_t> {
+			if (_functionGraph->debugInfo && _functionGraph->debugInfo->graphDebugData)
+				return _functionGraph->debugInfo->graphDebugData->astID;
+			return std::nullopt;
+		}();
 		functionLabels[_function] = !nameAlreadySeen ?
 			_assembly.namedLabel(
 				_function->name.str(),
 				_functionGraph->arguments.size(),
 				_functionGraph->returns.size(),
-				_functionGraph->debugData ? _functionGraph->debugData->astID : std::nullopt
+				sourceID
 			) :
 			_assembly.newLabelId();
 	}
@@ -171,11 +176,10 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 
 	for (std::size_t operationIndex = 0; operationIndex < block.operations.size(); ++operationIndex)
 	{
-		SSACFG::Operation const& operation = m_cfg.operation(block.operations[operationIndex]);
 		auto const& operationInLayout = blockLayout->operationIn[operationIndex];
 
 		// perform the operation
-		(*this)(operation, operationInLayout);
+		(*this)(block.operations[operationIndex], operationInLayout);
 	}
 
 	// Shuffle to the block's exit layout before dispatching the exit.
@@ -187,8 +191,9 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 	std::visit(util::GenericVisitor{ [this, &_blockId](auto const& exit) { (*this)(_blockId, exit); } }, block.exit);
 }
 
-void CodeTransform::operator()(SSACFG::Operation const& _operation, StackData const& _operationInputLayout)
+void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _operationInputLayout)
 {
+	SSACFG::Operation const& _operation = m_cfg.operation(_opId);
 	bool const hasReturnLabel =
 			std::holds_alternative<SSACFG::Call>(_operation.kind) &&
 			std::get<SSACFG::Call>(_operation.kind).canContinue;
@@ -235,10 +240,17 @@ void CodeTransform::operator()(SSACFG::Operation const& _operation, StackData co
 	// height of the stack sans function return label and operation inputs
 	std::size_t const baseHeight = m_stack.size() - _operation.inputs.size() - (hasReturnLabel ? 1 : 0);
 
+	auto const opOriginLocation = [&]() -> langutil::SourceLocation {
+		if (m_cfg.debugInfo)
+			if (auto const& dbg = m_cfg.debugInfo->operationDebugData(_opId))
+				return dbg->originLocation;
+		return {};
+	}();
+
 	// generate code for the operation
 	std::visit(util::GenericVisitor{
 		[&](SSACFG::BuiltinCall const& _builtin) {
-			m_assembly.setSourceLocation(originLocationOf(_builtin));
+			m_assembly.setSourceLocation(opOriginLocation);
 			static_cast<BuiltinFunctionForEVM const&>(_builtin.builtin.get()).generateCode(
 				_builtin.call,
 				m_assembly,
@@ -249,7 +261,7 @@ void CodeTransform::operator()(SSACFG::Operation const& _operation, StackData co
 			auto const* returnLabel = util::valueOrNullptr(m_returnLabels, &_call.call.get());
 			// check that if we have a return label, the call can continue
 			yulAssert(!!returnLabel == _call.canContinue);
-			m_assembly.setSourceLocation(originLocationOf(_call));
+			m_assembly.setSourceLocation(opOriginLocation);
 			m_assembly.appendJumpTo(
 				m_functionLabels.at(&_call.function.get()),
 				static_cast<int>(_call.function.get().numReturns - _call.function.get().numArguments) - (_call.canContinue ? 1 : 0),
