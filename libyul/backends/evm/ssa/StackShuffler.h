@@ -348,7 +348,7 @@ private:
 			else
 			{
 				// even if it is not dup reachable, it still might be swappable
-				if (_stack.swapReachable(sourceOffset) && _state.isSafeToSwapWithTop(sourceOffset))
+				if (_stack.isValidSwapTarget(sourceOffset) && _state.isSafeToSwapWithTop(sourceOffset))
 				{
 					_stack.swap(sourceOffset);
 					return true;
@@ -387,28 +387,28 @@ private:
 				{
 					// try swapping it with something in the tail that also fixes the top
 					for (StackOffset offset: _state.stackTailRange())
-						if (_stack.swapReachable(offset) && _state.isArgsCompatible(offset, stackTop))
+						if (_stack.isValidSwapTarget(offset) && _state.isArgsCompatible(offset, stackTop))
 						{
 							_stack.swap(offset);
 							return true;
 						}
 					// otherwise try swapping it with something that needs to go into args
 					for (StackOffset offset: _state.stackTailRange())
-						if (_stack.swapReachable(offset) && _state.countInArgs(_stack[offset]) < _state.targetArgsCount(_stack[offset]))
+						if (_stack.isValidSwapTarget(offset) && _state.countInArgs(_stack[offset]) < _state.targetArgsCount(_stack[offset]))
 						{
 							_stack.swap(offset);
 							return true;
 						}
 					// otherwise try swapping it with something that can be popped
 					for (StackOffset offset: _state.stackTailRange())
-						if (_stack.swapReachable(offset) && _stack.canBeFreelyGenerated(_stack[offset]) && !_stack[offset].isLiteralValueID())
+						if (_stack.isValidSwapTarget(offset) && _stack.canBeFreelyGenerated(_stack[offset]) && !_stack[offset].isLiteralValueID())
 						{
 							_stack.swap(offset);
 							return true;
 						}
 					// otherwise try swapping it with a literal
 					for (StackOffset offset: _state.stackTailRange())
-						if (_stack.swapReachable(offset) && _stack[offset].isLiteralValueID())
+						if (_stack.isValidSwapTarget(offset) && _stack[offset].isLiteralValueID())
 						{
 							_stack.swap(offset);
 							return true;
@@ -421,7 +421,7 @@ private:
 					if (
 						offset != stackTop &&
 						_stack[offset] != _stack[stackTop] &&  // don't swap identical values (no-op)
-						_stack.swapReachable(offset) &&
+						_stack.isValidSwapTarget(offset) &&
 						_state.isArgsCompatible(offset, stackTop) &&
 						_state.isArgsCompatible(stackTop, offset) &&
 						!_state.targetArbitrary(offset)
@@ -436,7 +436,7 @@ private:
 					if (
 						offset != stackTop &&
 						_stack[offset] != _stack[stackTop] &&  // don't swap identical values (no-op)
-						_stack.swapReachable(offset) &&
+						_stack.isValidSwapTarget(offset) &&
 						!_state.isArgsCompatible(offset, offset) &&
 						_state.isArgsCompatible(stackTop, offset)
 					)
@@ -448,7 +448,7 @@ private:
 				// try swapping top with a tail slot that has what we need at top
 				for (StackOffset tailOffset: _state.stackTailRange())
 					if (
-						_stack.swapReachable(tailOffset) &&
+						_stack.isValidSwapTarget(tailOffset) &&
 						_state.isArgsCompatible(tailOffset, stackTop) &&
 						(!_state.requiredInTail(_stack[tailOffset]) || _state.countInTail(_stack[tailOffset]) > 1) &&
 						// current top can safely go to tail (not needed in args, or we have excess)
@@ -466,7 +466,7 @@ private:
 			// swap up any slot in args that is out of position and has a slot available in args that it can occupy
 			for (StackOffset offset: _state.stackArgsRange())
 			{
-				bool const reachable = _stack.swapReachable(offset);
+				bool const reachable = _stack.isValidSwapTarget(offset);
 				bool const identical = _state.isArgsCompatible(offset, stackTop) && !_state.targetArbitrary(stackTop);
 				if (
 					reachable &&
@@ -481,7 +481,7 @@ private:
 					for (StackOffset targetOffset: _state.stackArgsRange())
 						if (
 							targetOffset != offset &&  // we shouldn't be looking at the very same offset
-							_stack.swapReachable(targetOffset) &&  // the target offset should be within reach
+							_stack.isValidSwapTarget(targetOffset) &&  // the target offset should be within reach
 							_state.isArgsCompatible(offset, targetOffset) &&  // we can put offset -> targetOffset
 							!_state.isArgsCompatible(targetOffset, targetOffset)  // targetOffset doesn't like where it is
 						)
@@ -562,7 +562,7 @@ private:
 					// within dup-reach or we can just push it
 					if (auto depth = _stack.findSlotDepth(arg))
 					{
-						yulAssert(depth->value == 0 || _stack.swapReachable(*depth));
+						yulAssert(depth->value == 0 || _stack.isValidSwapTarget(*depth));
 						// if we can't outright dup the slot, let's shrink the stack first
 						if (!_stack.dupReachable(*depth))
 						{
@@ -612,7 +612,7 @@ private:
 				{
 					auto const& slotAtTailOffset = _stack[tailOffset];
 					if (
-						_stack.swapReachable(tailOffset) &&  // we can swap that deep
+						_stack.isValidSwapTarget(tailOffset) &&  // we can swap that deep
 						(!_state.requiredInTail(slotAtTailOffset) || _state.countInTail(slotAtTailOffset) > 1) &&  // dont need it in tail or it's available more than once
 						_state.requiredInArgs(slotAtTailOffset) &&  // we need the tail offset slot in args
 						_state.targetArgsCount(slotAtTailOffset) > _state.countInArgs(slotAtTailOffset)  // we don't already have enough of it in args
@@ -629,7 +629,7 @@ private:
 				// find the lowest swappable slot in tail that can be popped but is no literal, swap
 				for (StackOffset tailOffset: _state.stackTailRange())
 					if (
-						_stack.swapReachable(tailOffset) &&
+						_stack.isValidSwapTarget(tailOffset) &&
 						_stack.canBeFreelyGenerated(_stack[tailOffset]) &&
 						!_stack[tailOffset].isLiteralValueID()
 					)
@@ -644,7 +644,7 @@ private:
 				// find the lowest swappable slot in tail that is a literal, swap
 				for (StackOffset tailOffset: _state.stackTailRange())
 					if (
-						_stack.swapReachable(tailOffset) &&
+						_stack.isValidSwapTarget(tailOffset) &&
 						_stack[tailOffset].isLiteralValueID()
 					)
 					{
@@ -704,7 +704,7 @@ private:
 				for (StackOffset argsOffset: _state.stackArgsRange())
 					if (
 						_stack[argsOffset] != _stack[stackTop] &&  // don't swap identical values (no-op)
-						_stack.swapReachable(argsOffset) &&
+						_stack.isValidSwapTarget(argsOffset) &&
 						_state.isArgsCompatible(stackTop, argsOffset) &&
 						!_state.isArgsCompatible(argsOffset, argsOffset)
 					)
@@ -734,7 +734,7 @@ private:
 				for (StackOffset tailOffset: _state.stackTailRange() | ranges::views::reverse)
 					if (
 						_stack[tailOffset] != _stack[stackTop] &&  // don't swap identical values (no-op)
-						_stack.swapReachable(tailOffset) &&  // we can reach the offset
+						_stack.isValidSwapTarget(tailOffset) &&  // we can reach the offset
 						!(_state.requiredInTail(_stack[tailOffset]) && _state.countInTail(_stack[tailOffset]) <= 1)  // it's okay to swap the tail offset out
 					)
 					{
@@ -809,7 +809,7 @@ private:
 				}
 				else
 				{
-					if (depth->value != 0 && !_stack.swapReachable(*depth))
+					if (depth->value != 0 && !_stack.isValidSwapTarget(*depth))
 						return _stack.depthToOffset(*depth);
 				}
 			}
