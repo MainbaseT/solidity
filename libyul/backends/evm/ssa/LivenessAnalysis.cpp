@@ -243,8 +243,9 @@ void LivenessAnalysis::runDagDfs()
 			// add value ids to the live set that are used in exit blocks
 			live += blockExitValues(blockId);
 
-			for (auto const& op: block.operations | ranges::views::reverse)
+			for (auto const opId: block.operations | ranges::views::reverse)
 			{
+				auto const& op = m_cfg.operation(opId);
 				// remove variables defined at p from live
 				live.eraseAll(op.outputs | ranges::views::filter(excludingLiteralsFilter()) | ranges::to<std::vector>);
 				// add uses at p to live
@@ -297,8 +298,9 @@ void LivenessAnalysis::fillOperationsLiveOut()
 			auto live = m_liveOuts[blockId.value];
 			live += blockExitValues(blockId);
 			auto rit = liveOuts.rbegin();
-			for (auto const& op: operations | ranges::views::reverse)
+			for (auto const opId: operations | ranges::views::reverse)
 			{
+				auto const& op = m_cfg.operation(opId);
 				*rit = live;
 				for (auto const& output: op.outputs | ranges::views::filter(excludingLiteralsFilter()))
 					live.erase(output);

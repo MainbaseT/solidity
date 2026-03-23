@@ -123,8 +123,8 @@ Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const
 			blockJson["instructions"].push_back(phiJson);
 		}
 	}
-	for (auto const& operation: block.operations)
-		blockJson["instructions"].push_back(toJson(blockJson, _cfg, operation));
+	for (auto const opId: block.operations)
+		blockJson["instructions"].push_back(toJson(blockJson, _cfg, _cfg.operation(opId)));
 
 	return blockJson;
 }

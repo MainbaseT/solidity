@@ -100,8 +100,9 @@ protected:
 			auto const& phiInfo = m_cfg.phiInfo(phi);
 			_out << fmt::format("phi{} := {}\\l\\\n", phi.value(), formatPhi(m_cfg, phiInfo));
 		}
-		for (auto const& operation: block.operations)
+		for (auto const opId: block.operations)
 		{
+			auto const& operation = m_cfg.operation(opId);
 			std::string const label = std::visit(GenericVisitor{
 				[&](SSACFG::Call const& _call) {
 					return _call.function.get().name.str();
@@ -155,7 +156,7 @@ private:
 
 }
 
-std::string SSACFG::ValueId::str(SSACFG const& _cfg) const
+std::string ValueId::str(SSACFG const& _cfg) const
 {
 	if (!hasValue())
 		return "INVALID";

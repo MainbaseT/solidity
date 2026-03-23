@@ -74,7 +74,7 @@ protected:
 
 		for (std::size_t i = 0; i < block.operations.size(); ++i)
 		{
-			auto const& operation = block.operations[i];
+			auto const& operation = m_cfg.operation(block.operations[i]);
 			yulAssert(i < blockLayout->operationIn.size());
 			auto operationStack = blockLayout->operationIn[i];
 
