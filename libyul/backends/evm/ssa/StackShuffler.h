@@ -809,7 +809,7 @@ private:
 				}
 				else
 				{
-					if (!_stack.swapReachable(*depth))
+					if (depth->value != 0 && !_stack.swapReachable(*depth))
 						return _stack.depthToOffset(*depth);
 				}
 			}
