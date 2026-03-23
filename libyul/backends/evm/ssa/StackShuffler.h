@@ -562,7 +562,7 @@ private:
 					// within dup-reach or we can just push it
 					if (auto depth = _stack.findSlotDepth(arg))
 					{
-						yulAssert(depth->value == 0 || _stack.isValidSwapTarget(*depth));
+						yulAssert(!_stack.isBeyondSwapRange(*depth));
 						// if we can't outright dup the slot, let's shrink the stack first
 						if (!_stack.dupReachable(*depth))
 						{
@@ -809,7 +809,7 @@ private:
 				}
 				else
 				{
-					if (depth->value != 0 && !_stack.isValidSwapTarget(*depth))
+					if (_stack.isBeyondSwapRange(*depth))
 						return _stack.depthToOffset(*depth);
 				}
 			}
