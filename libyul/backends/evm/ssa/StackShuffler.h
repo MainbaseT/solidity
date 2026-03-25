@@ -603,16 +603,6 @@ private:
 				_state.countInTail(slotAtOffset) == 0  // if we don't have the slot in tail right now
 			)
 			{
-				// If we don't have enough copies of this slot, dup first instead of swapping.
-				if (_state.count(slotAtOffset) < _state.targetMinCount(slotAtOffset))
-				{
-					if (_stack.dupReachable(offset))
-					{
-						_stack.dup(offset);
-						return true;
-					}
-				}
-
 				// find the lowest swappable slot in tail that needs to go to args, swap
 				for (StackOffset tailOffset: _state.stackTailRange())
 				{
