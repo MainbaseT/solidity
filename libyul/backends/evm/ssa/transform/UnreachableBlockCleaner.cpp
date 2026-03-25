@@ -53,6 +53,6 @@ void transform::cleanUnreachableBlocks(SSACFG& _cfg)
 		if (reachable[blockId.value])
 			std::erase_if(block.entries, [&](auto const& entry) { return !reachable[entry.value]; });
 		else
-			block.upsilons.clear();
+			block = {};
 	}
 }
