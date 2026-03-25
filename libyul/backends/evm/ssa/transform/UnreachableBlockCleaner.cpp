@@ -20,8 +20,8 @@
 
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
-#include <libsolutil/Algorithms.h>
-#include <libsolutil/Visitor.h>
+#include <deque>
+#include <vector>
 
 using namespace solidity;
 using namespace solidity::yul;
@@ -30,30 +30,29 @@ using namespace solidity::yul::ssa::transform;
 
 void transform::cleanUnreachableBlocks(SSACFG& _cfg)
 {
-	util::BreadthFirstSearch<SSACFG::BlockId> reachabilityCheck{{_cfg.entry}};
-	reachabilityCheck.run([&](SSACFG::BlockId const _blockId, auto&& _addChild) {
-		auto const& block = _cfg.block(_blockId);
-		visit(util::GenericVisitor{
-			[&](SSACFG::BasicBlock::Jump const& _jump) { _addChild(_jump.target); },
-			[&](SSACFG::BasicBlock::ConditionalJump const& _jump) {
-				_addChild(_jump.zero);
-				_addChild(_jump.nonZero);
-			},
-			[](SSACFG::BasicBlock::FunctionReturn const&) {},
-			[](SSACFG::BasicBlock::Terminated const&) {},
-			[](SSACFG::BasicBlock::MainExit const&) {}
-		}, block.exit);
-	});
-
-	for (SSACFG::BlockId const blockId: reachabilityCheck.visited)
+	std::vector<std::uint8_t> reachable(_cfg.numBlocks(), false);
+	std::deque worklist{_cfg.entry};
+	reachable[_cfg.entry.value] = true;
+	while (!worklist.empty())
 	{
-		auto& block = _cfg.block(blockId);
-		std::erase_if(block.entries, [&](auto const& entry) {
-			return !reachabilityCheck.visited.contains(entry);
+		auto const blockId = worklist.front();
+		worklist.pop_front();
+		auto const& block = _cfg.block(blockId);
+		block.forEachExit([&](BlockId const _exitBlock) {
+			if (!reachable[_exitBlock.value])
+			{
+				reachable[_exitBlock.value] = true;
+				worklist.push_back(_exitBlock);
+			}
 		});
 	}
 
 	for (SSACFG::BlockId blockId{0}; blockId.value < _cfg.numBlocks(); ++blockId.value)
-		if (!reachabilityCheck.visited.contains(blockId))
-			_cfg.block(blockId).upsilons.clear();
+	{
+		auto& block = _cfg.block(blockId);
+		if (reachable[blockId.value])
+			std::erase_if(block.entries, [&](auto const& entry) { return !reachable[entry.value]; });
+		else
+			block.upsilons.clear();
+	}
 }
