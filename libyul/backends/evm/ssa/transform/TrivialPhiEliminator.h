@@ -28,7 +28,10 @@ namespace solidity::yul::ssa
 
 class SSACFG;
 
+namespace transform
+{
 /// Removes unreachable blocks and trivial phis from the SSA CFG
 void eliminateTrivialPhis(SSACFG& _cfg);
+}
 
 }

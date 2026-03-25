@@ -16,7 +16,7 @@
 */
 // SPDX-License-Identifier: GPL-3.0
 
-#include <libyul/backends/evm/ssa/SSACFGTrivialPhiEliminator.h>
+#include <libyul/backends/evm/ssa/transform/TrivialPhiEliminator.h>
 
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
@@ -279,7 +279,7 @@ private:
 
 }
 
-void ssa::eliminateTrivialPhis(SSACFG& _cfg)
+void transform::eliminateTrivialPhis(SSACFG& _cfg)
 {
 	TrivialPhiEliminator(_cfg).run();
 }
