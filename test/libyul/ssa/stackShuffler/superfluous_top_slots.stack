@@ -1,8 +1,6 @@
 // todo: The upper two junk slots should be popped immediately, they are completely superfluous.
 initial: [JUNK, JUNK, v56, v57, JUNK, JUNK]
 targetStackTop: [JUNK, JUNK, v56, v57, lit0, v56, lit11]
-targetStackTailSet: {}
-targetStackSize: 7
 // ----
 //             |      0      1      2      3      4      5      6 |      7
 //             +------------------------------------------------- +-------
