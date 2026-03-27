@@ -793,26 +793,23 @@ private:
 	static std::optional<StackOffset> allNecessarySlotsReachableOrFinal(Stack<Callback> const& _stack, detail::State const& _state)
 	{
 		// check that args are either in position or reachable
-		for (StackOffset offset{_state.target().tailSize}; offset < _state.target().size; ++offset.value)
-			if (
-				offset < _state.size() &&
-				!_state.isArgsCompatible(offset, offset)
-			)
+		for (StackOffset const offset: _state.stackArgsRange())
+		{
+			if (_state.isArgsCompatible(offset, offset))
+				continue;
+			// find first occurrence of the slot
+			std::optional<StackDepth> depth = _stack.findSlotDepth(_state.targetArg(offset));
+			if (!depth)
 			{
-				// find first occurrence of the slot
-				std::optional<StackDepth> depth = _stack.findSlotDepth(_state.targetArg(offset));
-
-				if (!depth)
-				{
-					// if there is no occurrence of the slot anywhere, we must be able to freely generate it
-					yulAssert(_stack.canBeFreelyGenerated(_state.targetArg(offset)));
-				}
-				else
-				{
-					if (_stack.isBeyondSwapRange(*depth))
-						return _stack.depthToOffset(*depth);
-				}
+				// if there is no occurrence of the slot anywhere, we must be able to freely generate it
+				yulAssert(_stack.canBeFreelyGenerated(_state.targetArg(offset)));
 			}
+			else
+			{
+				if (_stack.isBeyondSwapRange(*depth))
+					return _stack.depthToOffset(*depth);
+			}
+		}
 		// distribution check: all we have to dup can be duped
 		for (StackOffset const offset: _state.stackRange())
 		{
