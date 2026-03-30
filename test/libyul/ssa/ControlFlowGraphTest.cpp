@@ -70,9 +70,12 @@ TestCase::TestResult ControlFlowGraphTest::run(std::ostream& _stream, std::strin
 		return TestResult::FatalError;
 	}
 
+	auto const* evmDialect = dynamic_cast<EVMDialect const*>(&yulStack.dialect());
+	yulAssert(evmDialect);
+
 	std::unique_ptr<yul::ssa::ControlFlow> controlFlow = yul::ssa::SSACFGBuilder::build(
 		*yulStack.parserResult()->analysisInfo,
-		yulStack.dialect(),
+		*evmDialect,
 		yulStack.parserResult()->code()->root(),
 		true
 	);

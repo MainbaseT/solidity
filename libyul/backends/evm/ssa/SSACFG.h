@@ -24,6 +24,8 @@
 #include <libyul/backends/evm/ssa/SSACFGDebugInfo.h>
 #include <libyul/backends/evm/ssa/SSACFGTypes.h>
 
+#include <libyul/backends/evm/EVMDialect.h>
+
 #include <libyul/AST.h>
 #include <libyul/AsmAnalysisInfo.h>
 #include <libyul/Dialect.h>
@@ -47,7 +49,11 @@ class SSACFG
 public:
 	using DebugInfo = SSACFGDebugInfo;
 
-	explicit SSACFG(std::unique_ptr<DebugInfo> _debugInfo = std::make_unique<DebugInfo>()):
+	explicit SSACFG(
+		EVMDialect const& _evmVersion,
+		std::unique_ptr<DebugInfo> _debugInfo = nullptr
+	):
+		evmDialect(_evmVersion),
 		debugInfo(std::move(_debugInfo))
 	{}
 
@@ -266,6 +272,7 @@ private:
 	std::vector<VariableValue> m_variables;
 	std::optional<ValueId> m_unreachableValue;
 public:
+	EVMDialect const& evmDialect;
 	std::unique_ptr<DebugInfo> debugInfo;
 	BlockId entry = BlockId{0};
 	std::set<BlockId> exits;

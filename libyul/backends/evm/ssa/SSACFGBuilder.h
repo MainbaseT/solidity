@@ -36,9 +36,13 @@
 */
 #pragma once
 
-#include <libyul/backends/evm/ssa/ControlFlow.h>
 #include <libyul/ControlFlowSideEffectsCollector.h>
+
+#include <libyul/backends/evm/EVMDialect.h>
+
+#include <libyul/backends/evm/ssa/ControlFlow.h>
 #include <libyul/backends/evm/ssa/SSACFG.h>
+
 #include <stack>
 #include <unordered_map>
 
@@ -52,7 +56,7 @@ class SSACFGBuilder
 		SSACFG& _graph,
 		AsmAnalysisInfo const& _analysisInfo,
 		ControlFlowSideEffectsCollector const& _sideEffects,
-		Dialect const& _dialect,
+		EVMDialect const& _dialect,
 		bool _keepLiteralAssignments,
 		bool _generateDebugInfo
 	);
@@ -61,7 +65,7 @@ public:
 	SSACFGBuilder& operator=(SSACFGBuilder const&) = delete;
 	static std::unique_ptr<ControlFlow> build(
 		AsmAnalysisInfo const& _analysisInfo,
-		Dialect const& _dialect,
+		EVMDialect const& _dialect,
 		Block const& _block,
 		bool _keepLiteralAssignments,
 		bool _generateDebugInfo = true
@@ -104,7 +108,7 @@ private:
 	SSACFG& m_graph;
 	AsmAnalysisInfo const& m_info;
 	ControlFlowSideEffectsCollector const& m_sideEffects;
-	Dialect const& m_dialect;
+	EVMDialect const& m_dialect;
 	bool const m_keepLiteralAssignments;
 	bool const m_generateDebugInfo;
 	std::vector<std::tuple<Scope::Function const*, FunctionDefinition const*>> m_functionDefinitions;
