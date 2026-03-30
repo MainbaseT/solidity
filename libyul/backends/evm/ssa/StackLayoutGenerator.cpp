@@ -64,7 +64,7 @@ void handlePhiFunctions(StackData& _stackData, PhiInverse const& _phiInverse, Li
 	}
 }
 
-using StackType = Stack<CountingInstructionsCallbacks>;
+using StackType = Stack<GasAccumulatingCallbacks>;
 
 void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 {
@@ -184,7 +184,7 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 				continue;
 			proposals[i] = *parentExits[i].second;
 			{
-				StackType stack(proposals[i], {});
+				StackType stack(proposals[i], {.cfg = m_cfg});
 				declareJunk(stack, liveIn);
 			}
 			handlePhiFunctions(proposals[i], PhiInverse(m_cfg, parentExits[i].first, _blockId), liveIn);
@@ -200,14 +200,14 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 				if (j == i || !parentExits[j].second)
 					continue;
 				auto proposalCopy = proposals[j];
-				StackType stack(proposalCopy, {});
+				StackType stack(proposalCopy, {.cfg = m_cfg});
 				StackShuffler<StackType::Callbacks>::shuffle(
 					stack,
 					proposals[i],
 					{},
 					proposals[i].size()
 				);
-				cumulativeCost += stack.callbacks().numOps;
+				cumulativeCost += stack.callbacks().opGas;
 			}
 			cumulativeCosts[i] = cumulativeCost;
 		}
@@ -229,7 +229,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 	SSACFG::BasicBlock const& block = m_cfg.block(_blockId);
 
 	StackData currentStackData = blockLayout.stackIn;
-	StackType stack(currentStackData, {});
+	StackType stack(currentStackData, {.cfg = m_cfg});
 	bool const junkCanBeAdded = m_junkAdmittingBlocksFinder->allowsAdditionOfJunk(_blockId);
 
 	auto const& operationsLiveOut = m_liveness.operationsLiveOut(_blockId);
@@ -260,7 +260,13 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 			)
 				stack.declareJunk(depth);
 
-		std::size_t const targetSize = findOptimalTargetSize(stack.data(), requiredStackTop, opLiveOutWithoutOutputs, junkCanBeAdded, m_hasFunctionReturnLabel);
+		std::size_t const targetSize = findOptimalTargetSize(
+			stack.data(),
+			requiredStackTop,
+			opLiveOutWithoutOutputs,
+			junkCanBeAdded,
+			m_hasFunctionReturnLabel
+		);
 		StackShuffler<StackType::Callbacks>::shuffle(
 			stack,
 			requiredStackTop,
@@ -270,9 +276,9 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 
 		blockLayout.operationIn.push_back(currentStackData);
 		for (std::size_t i = 0; i < requiredStackTop.size(); ++i)
-			stack.pop();
+			stack.pop<false>();
 		for (auto const& val: operation.outputs)
-			stack.push(Slot::makeValueID(val));
+			stack.push<false>(Slot::makeValueID(val));
 	}
 
 	if (auto const* cjump = std::get_if<SSACFG::BasicBlock::ConditionalJump>(&block.exit))
@@ -288,7 +294,13 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 		if (!conditionSlotAlreadyFinal)
 		{
 			auto const condition = Slot::makeValueID(cjump->condition);
-			auto const targetSize = findOptimalTargetSize(stack.data(), {condition}, blockLiveOut, false, m_hasFunctionReturnLabel);
+			auto const targetSize = findOptimalTargetSize(
+				stack.data(),
+				{condition},
+				blockLiveOut,
+				false,
+				m_hasFunctionReturnLabel
+			);
 			StackShuffler<StackType::Callbacks>::shuffle(
 				stack, {condition}, blockLiveOut, targetSize
 			);
@@ -314,7 +326,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				// same as nonzero stack in initially
 				zeroLayout = nonZeroLayout;
 				handlePhiFunctions(zeroLayout->stackIn, PhiInverse(m_cfg, _blockId, cjump->zero), zeroLiveIn);
-				StackType zeroStack(zeroLayout->stackIn, {});
+				StackType zeroStack(zeroLayout->stackIn, {.cfg = m_cfg});
 				declareJunk(zeroStack, zeroLiveIn);
 			}
 		}
