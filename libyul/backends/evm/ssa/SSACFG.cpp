@@ -25,11 +25,9 @@
 #include <libsolutil/StringUtils.h>
 #include <libsolutil/Visitor.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wtautological-compare"
 #include <fmt/ranges.h>
-#pragma GCC diagnostic pop
 
+#include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
 using namespace solidity;

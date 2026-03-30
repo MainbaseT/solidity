@@ -32,8 +32,6 @@
 
 #include <libsolutil/Numeric.h>
 
-#include <range/v3/view/map.hpp>
-
 #include <concepts>
 #include <deque>
 #include <functional>
