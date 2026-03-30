@@ -66,6 +66,8 @@ public:
 	/// Obtain the amount of the provided slot that is required in target args
 	std::size_t targetArgsCount(StackSlot const& _slot) const;
 
+	bool willRequireShrinking() const;
+
 	/// Checks if the state is compatible with the target
 	bool admissible() const;
 
@@ -193,6 +195,10 @@ private:
 			yulAssert(false, "stack too deep");
 		}
 		yulAssert(_stack.size() <= _state.target().size, "I1 violated: Stack size too large");
+
+		if (_state.willRequireShrinking())
+			if (shrinkStack(_stack, _state))
+				return true;
 
 		// after this, all current slots are either in acceptable positions or at least dup-reachable
 		if (auto unreachableOffset = allNecessarySlotsReachableOrFinal(_stack, _state))
