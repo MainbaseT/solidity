@@ -52,7 +52,7 @@ SSACFGBuilder::SSACFGBuilder(
 	SSACFG& _graph,
 	AsmAnalysisInfo const& _analysisInfo,
 	ControlFlowSideEffectsCollector const& _sideEffects,
-	Dialect const& _dialect,
+	EVMDialect const& _dialect,
 	bool _keepLiteralAssignments,
 	bool _generateDebugInfo
 ):
@@ -68,7 +68,7 @@ SSACFGBuilder::SSACFGBuilder(
 
 std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 	AsmAnalysisInfo const& _analysisInfo,
-	Dialect const& _dialect,
+	EVMDialect const& _dialect,
 	Block const& _block,
 	bool _keepLiteralAssignments,
 	bool _generateDebugInfo
@@ -78,6 +78,7 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 
 	auto controlFlow = std::make_unique<ControlFlow>();
 	controlFlow->functionGraphs.emplace_back(std::make_unique<SSACFG>(
+		_dialect,
 		_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
 	));
 	controlFlow->functionGraphMapping.emplace_back(nullptr, controlFlow->functionGraphs.back().get());
@@ -101,6 +102,7 @@ void SSACFGBuilder::buildFunctionGraph(
 )
 {
 	m_controlFlow.functionGraphs.emplace_back(std::make_unique<SSACFG>(
+		m_dialect,
 		m_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
 	));
 	auto& cfg = *m_controlFlow.functionGraphs.back();

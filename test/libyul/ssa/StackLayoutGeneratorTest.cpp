@@ -145,9 +145,12 @@ frontend::test::TestCase::TestResult StackLayoutGeneratorTest::run(std::ostream&
 		auto const& object = *toVisit.back();
 		toVisit.pop_back();
 
+		auto const* evmDialect = dynamic_cast<EVMDialect const*>(object.dialect());
+		yulAssert(evmDialect);
+
 		std::unique_ptr<ControlFlow> const controlFlow = SSACFGBuilder::build(
 			*object.analysisInfo,
-			*object.dialect(),
+			*evmDialect,
 			object.code()->root(),
 			false
 		);
