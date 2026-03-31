@@ -87,7 +87,7 @@ std::size_t solidity::yul::ssa::findOptimalTargetSize
 		{
 			--size;
 			auto const cost = evaluateCost(size);
-			if (cost < bestCost)
+			if (cost <= bestCost)
 			{
 				bestCost = cost;
 				result = size;
