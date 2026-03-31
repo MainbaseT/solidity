@@ -7,8 +7,7 @@ targetStackSize: 3
 //             |      0 |      1      2
 //             +------- +--------------
 //    (initial)|     v0 |     v1
-//         DUP1|     v0 |     v1     v1
-//        SWAP2|     v1 |     v1     v0
-//        SWAP1|     v1 |     v0     v1
+//        SWAP1|     v1 |     v0
+//         DUP2|     v1 |     v0     v1
 //             +------- +--------------
 //     (target)|   {v1} |     v0     v1
