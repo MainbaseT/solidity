@@ -41,8 +41,8 @@ contract test {
 // gas legacy code: 629800
 // gas legacyOptimized: 87926
 // gas legacyOptimized code: 429800
-// gas ssaCFGOptimized: 80162
-// gas ssaCFGOptimized code: 334800
+// gas ssaCFGOptimized: 80061
+// gas ssaCFGOptimized code: 334000
 // encode_inline_asm(bytes): 0x20, 0 -> 0x20, 0
 // encode_inline_asm(bytes): 0x20, 1, "f" -> 0x20, 4, "Zg=="
 // encode_inline_asm(bytes): 0x20, 2, "fo" -> 0x20, 4, "Zm8="
@@ -61,9 +61,9 @@ contract test {
 // gas irOptimized: 1406025
 // gas legacy: 1554038
 // gas legacyOptimized: 1132031
-// gas ssaCFGOptimized: 1391028
+// gas ssaCFGOptimized: 1391025
 // encode_no_asm_large()
 // gas irOptimized: 3512081
 // gas legacy: 4600082
 // gas legacyOptimized: 2813075
-// gas ssaCFGOptimized: 3097084
+// gas ssaCFGOptimized: 3097081

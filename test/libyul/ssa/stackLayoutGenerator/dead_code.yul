@@ -68,11 +68,11 @@
 // Block0_5 [label="\
 // IN: [v0, v1]\l\
 // \l\
-// [v0, v1, v0]\l\
+// [v1, v0]\l\
 // sstore\l\
-// [v0]\l\
+// []\l\
 // \l\
-// OUT: [v0]\l\
+// OUT: []\l\
 // "];
 // Block0_5Exit [label="MainExit"];
 // Block0_5 -> Block0_5Exit;
