@@ -176,18 +176,18 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 	{
 		// we have more than one entry and need to unify or at the very least apply phi fct.
 		auto const& liveIn = m_liveness.liveIn(_blockId);
-		// Pre-compute each parent's phi-term proposal (declareJunk + handlePhiFunctions) once
+		// Pre-compute each parent's proposal
 		std::vector<StackData> proposals(parentExits.size());
 		for (std::size_t i = 0; i < parentExits.size(); ++i)
 		{
 			if (!parentExits[i].second)
 				continue;
 			proposals[i] = *parentExits[i].second;
+			handlePhiFunctions(proposals[i], PhiInverse(m_cfg, parentExits[i].first, _blockId), liveIn);
 			{
 				StackType stack(proposals[i], {.cfg = m_cfg});
 				declareJunk(stack, liveIn);
 			}
-			handlePhiFunctions(proposals[i], PhiInverse(m_cfg, parentExits[i].first, _blockId), liveIn);
 		}
 		std::vector cumulativeCosts(parentExits.size(), std::numeric_limits<std::size_t>::max());
 		for (std::size_t i = 0; i < parentExits.size(); ++i)
