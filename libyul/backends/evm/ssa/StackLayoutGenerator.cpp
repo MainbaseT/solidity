@@ -64,7 +64,7 @@ void handlePhiFunctions(StackData& _stackData, PhiInverse const& _phiInverse, Li
 	}
 }
 
-using StackType = Stack<GasAccumulatingCallbacks>;
+using StackType = Stack<>;
 
 void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 {
@@ -185,7 +185,7 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 			proposals[i] = *parentExits[i].second;
 			handlePhiFunctions(proposals[i], PhiInverse(m_cfg, parentExits[i].first, _blockId), liveIn);
 			{
-				StackType stack(proposals[i], {.cfg = m_cfg});
+				StackType stack(proposals[i], {});
 				declareJunk(stack, liveIn);
 			}
 		}
@@ -200,8 +200,8 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 				if (j == i || !parentExits[j].second)
 					continue;
 				auto proposalCopy = proposals[j];
-				StackType stack(proposalCopy, {.cfg = m_cfg});
-				StackShuffler<StackType::Callbacks>::shuffle(
+				Stack<GasAccumulatingCallbacks> stack(proposalCopy, {.cfg = m_cfg});
+				StackShuffler<GasAccumulatingCallbacks>::shuffle(
 					stack,
 					proposals[i],
 					{},
@@ -214,7 +214,6 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 		auto const argMin = static_cast<std::size_t>(
 			std::distance(cumulativeCosts.begin(), ranges::min_element(cumulativeCosts))
 		);
-		yulAssert(parentExits[argMin].second);
 		blockLayout.stackIn = std::move(proposals[argMin]);
 	}
 	m_resultLayout[_blockId] = blockLayout;
@@ -229,7 +228,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 	SSACFG::BasicBlock const& block = m_cfg.block(_blockId);
 
 	StackData currentStackData = blockLayout.stackIn;
-	StackType stack(currentStackData, {.cfg = m_cfg});
+	StackType stack(currentStackData, {});
 	bool const junkCanBeAdded = m_junkAdmittingBlocksFinder->allowsAdditionOfJunk(_blockId);
 
 	auto const& operationsLiveOut = m_liveness.operationsLiveOut(_blockId);
