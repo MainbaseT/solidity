@@ -104,7 +104,7 @@ protected:
 		}
 
 		_out << "\\l\\\n";
-		_out << "OUT: " << stackToString(blockLayout->stackOut) << "\\l\\\n";
+		_out << "OUT: " << stackToString(blockLayout->exitIn) << "\\l\\\n";
 	}
 
 private:
