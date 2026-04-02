@@ -185,7 +185,8 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 	// Shuffle to the block's exit layout before dispatching the exit.
 	// This ensures the condition is on top for ConditionalJump, phi pre-images are
 	// in the right positions for jumps, and return values are accessible for FunctionReturn.
-	StackShuffler<AssemblyCallbacks>::shuffle(m_stack, blockLayout->exitIn);
+	auto const shuffleResult = StackShuffler<AssemblyCallbacks>::shuffle(m_stack, blockLayout->exitIn);
+	yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 
 	// handle the block exit
 	std::visit(util::GenericVisitor{ [this, &_blockId](auto const& exit) { (*this)(_blockId, exit); } }, block.exit);
@@ -209,7 +210,10 @@ void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _oper
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
 
 	// prepare stack for operation
-	StackShuffler<AssemblyCallbacks>::shuffle(m_stack, _operationInputLayout);
+	{
+		auto const shuffleResult = StackShuffler<AssemblyCallbacks>::shuffle(m_stack, _operationInputLayout);
+		yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
+	}
 
 	// check that the assembly stack height corresponds to the stack size after shuffling
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
@@ -395,7 +399,10 @@ void CodeTransform::prepareBlockExitStack(StackData const& _target, PhiInverse c
 	// pull back target to live in current variable space
 	auto const pulledBackTarget = stackPreImage(_target, _phiInverse);
 	// shuffle to target
-	StackShuffler<AssemblyCallbacks>::shuffle(m_stack, pulledBackTarget);
+	{
+		auto const shuffleResult = StackShuffler<AssemblyCallbacks>::shuffle(m_stack, pulledBackTarget);
+		yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
+	}
 	// check that shuffling was successful
 	assertLayoutCompatibility(m_stack.data(), pulledBackTarget);
 	// now we can simply set the target to the actual one which will take care of the application of phi functions
