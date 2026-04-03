@@ -11,3 +11,4 @@ targetStackSize: 3
 //         DUP2|     v1 |     v0     v1
 //             +------- +--------------
 //     (target)|   {v1} |     v0     v1
+// Status: Admissible

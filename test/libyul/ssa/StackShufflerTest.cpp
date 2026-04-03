@@ -115,6 +115,16 @@ Slot parseSlot(std::string_view token)
 			return Slot::makeValueID(ValueId::makeLiteral(*num));
 		throw std::runtime_error(fmt::format("Couldn't parse literal token: {}", token));
 	}
+
+	static constexpr std::string_view returnLabelPrefix = "ReturnLabel[";
+	if (token.starts_with(returnLabelPrefix) && token.ends_with("]"))
+	{
+		auto const inner = token.substr(returnLabelPrefix.size(), token.size() - returnLabelPrefix.size() - 1);
+		if (auto const num = util::parseArithmetic<ControlFlow::FunctionGraphID>(inner))
+			return Slot::makeFunctionReturnLabel(*num);
+		throw std::runtime_error(fmt::format("Couldn't parse ReturnLabel token: {}", token));
+	}
+
 	throw std::runtime_error(fmt::format("Unknown token: {}", token));
 }
 
@@ -267,6 +277,15 @@ public:
 		m_entries.push_back(TraceEntry{_operation, _stack});
 	}
 
+	void truncate(size_t const _maxEntries)
+	{
+		if (m_entries.size() > _maxEntries)
+		{
+			m_entries.resize(_maxEntries);
+			m_truncated = true;
+		}
+	}
+
 	~TraceRecorder()
 	{
 		if (m_entries.empty())
@@ -285,6 +304,8 @@ public:
 		emitSeparatorLine(maxStackDepth, hasExcess);
 		for (auto const& entry: m_entries)
 			emitDataRow(entry, hasExcess);
+		if (m_truncated)
+			m_out << fmt::format("{:>{}}", "...", operationColumnWidth) << "|\n";
 		emitSeparatorLine(maxStackDepth, hasExcess);
 		emitTargetRow(hasExcess);
 	}
@@ -297,6 +318,7 @@ private:
 
 	std::ostream& m_out;
 	std::vector<TraceEntry> m_entries;
+	bool m_truncated = false;
 	TestStack::Data const& m_targetArgs;
 	Liveness const& m_targetTail;
 	size_t const m_targetStackSize;
@@ -434,18 +456,40 @@ explicitly provided.)";
 
 	auto stackData = *testConfig.initial;
 	std::ostringstream oss;
+	StackShufflerResult shuffleResult;
 	{
 		TraceRecorder trace(oss, *testConfig.targetStackTop, testConfig.targetStackTailSet, *testConfig.targetStackSize);
 		trace.record("(initial)", *testConfig.initial);
-		TestStack stack(stackData, {.hook = [&](std::string const& op){ trace.record(op, stackData); }});
-		StackShuffler<StackManipulationCallbacks>::shuffle(
+		TestStack stack(stackData, {.hook = [&](std::string const& op)
+		{
+			trace.record(op, stackData);
+		}});
+		shuffleResult = StackShuffler<StackManipulationCallbacks>::shuffle(
 			stack,
 			*testConfig.targetStackTop,
 			testConfig.targetStackTailSet,
 			*testConfig.targetStackSize
 		);
+		if (shuffleResult.status == StackShufflerResult::Status::MaxIterationsReached)
+			trace.truncate(30);
+	}
+
+	switch (shuffleResult.status)
+	{
+	case StackShufflerResult::Status::Admissible:
+		oss << "Status: Admissible\n";
+		break;
+	case StackShufflerResult::Status::StackTooDeep:
+		oss << fmt::format("Status: StackTooDeep (culprit: {})\n", slotToString(shuffleResult.culprit));
+		break;
+	case StackShufflerResult::Status::MaxIterationsReached:
+		oss << "Status: MaxIterationsReached\n";
+		break;
+	case StackShufflerResult::Status::Continue:
+		yulAssert(false, "Unexpected Continue status from shuffle()");
 	}
 	// check stack data
+	if (shuffleResult.status == StackShufflerResult::Status::Admissible)
 	{
 		yulAssert(*testConfig.targetStackSize >= testConfig.targetStackTop->size());
 		auto const tailSize = *testConfig.targetStackSize - testConfig.targetStackTop->size();
