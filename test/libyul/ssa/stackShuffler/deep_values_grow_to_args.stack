@@ -1,0 +1,40 @@
+// triple dup 2 values
+initial: [JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, v1, v2, JUNK]
+targetStackTop: [JUNK, v2, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, JUNK, lit1, v2, lit2, v2, lit3, v1, JUNK]
+// ----
+//             |      0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
+//             +--------------------------------------------------------------------------------------------------------------------------------------------
+//    (initial)|      *      *      *      *      *      *      *      *      *      *      *      *      *     v1     v2      *
+//          POP|      *      *      *      *      *      *      *      *      *      *      *      *      *     v1     v2
+//    PUSH lit2|      *      *      *      *      *      *      *      *      *      *      *      *      *     v1     v2   lit2
+//         DUP2|      *      *      *      *      *      *      *      *      *      *      *      *      *     v1     v2   lit2     v2
+//    PUSH lit3|      *      *      *      *      *      *      *      *      *      *      *      *      *     v1     v2   lit2     v2   lit3
+//         DUP2|      *      *      *      *      *      *      *      *      *      *      *      *      *     v1     v2   lit2     v2   lit3     v2
+//    PUSH lit1|      *      *      *      *      *      *      *      *      *      *      *      *      *     v1     v2   lit2     v2   lit3     v2   lit1
+//        SWAP6|      *      *      *      *      *      *      *      *      *      *      *      *      *   lit1     v2   lit2     v2   lit3     v2     v1
+//        SWAP1|      *      *      *      *      *      *      *      *      *      *      *      *      *   lit1     v2   lit2     v2   lit3     v1     v2
+//        SWAP7|      *      *      *      *      *      *      *      *      *      *      *      *     v2   lit1     v2   lit2     v2   lit3     v1      *
+//          POP|      *      *      *      *      *      *      *      *      *      *      *      *     v2   lit1     v2   lit2     v2   lit3     v1
+//         DUP3|      *      *      *      *      *      *      *      *      *      *      *      *     v2   lit1     v2   lit2     v2   lit3     v1     v2
+//        SWAP8|      *      *      *      *      *      *      *      *      *      *      *     v2     v2   lit1     v2   lit2     v2   lit3     v1      *
+//          POP|      *      *      *      *      *      *      *      *      *      *      *     v2     v2   lit1     v2   lit2     v2   lit3     v1
+//         DUP3|      *      *      *      *      *      *      *      *      *      *      *     v2     v2   lit1     v2   lit2     v2   lit3     v1     v2
+//        SWAP9|      *      *      *      *      *      *      *      *      *      *     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1      *
+//          POP|      *      *      *      *      *      *      *      *      *      *     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1
+//         DUP3|      *      *      *      *      *      *      *      *      *      *     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1     v2
+//       SWAP10|      *      *      *      *      *      *      *      *      *     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1      *
+//          POP|      *      *      *      *      *      *      *      *      *     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1
+//         DUP3|      *      *      *      *      *      *      *      *      *     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1     v2
+//       SWAP11|      *      *      *      *      *      *      *      *     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1      *
+//          POP|      *      *      *      *      *      *      *      *     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1
+//         DUP3|      *      *      *      *      *      *      *      *     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1     v2
+//       SWAP12|      *      *      *      *      *      *      *     v2     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1      *
+//          POP|      *      *      *      *      *      *      *     v2     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1
+//         DUP3|      *      *      *      *      *      *      *     v2     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1     v2
+//       SWAP13|      *      *      *      *      *      *     v2     v2     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1      *
+//          POP|      *      *      *      *      *      *     v2     v2     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1
+//         DUP3|      *      *      *      *      *      *     v2     v2     v2     v2     v2     v2     v2   lit1     v2   lit2     v2   lit3     v1     v2
+//          ...|
+//             +--------------------------------------------------------------------------------------------------------------------------------------------
+//     (target)|      *     v2      *      *      *      *      *      *      *      *      *      *      *   lit1     v2   lit2     v2   lit3     v1      *
+// Status: MaxIterationsReached
