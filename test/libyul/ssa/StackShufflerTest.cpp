@@ -298,16 +298,30 @@ public:
 		if (maxStackDepth == 0)
 			return;
 
+		std::size_t const numColumns = std::max(maxStackDepth, m_targetStackSize);
+		std::vector columnWidths(numColumns, slotColumnWidth);
+		for (const auto& [operation, stackAfter]: m_entries)
+			for (std::size_t i = 0; i < stackAfter.size(); ++i)
+			{
+				std::string const slotStr = stackAfter[i].isJunk() ? std::string(1, junkSymbol) : slotToString(stackAfter[i]);
+				columnWidths[i] = std::max(columnWidths[i], slotStr.size() + 1);
+			}
+		for (std::size_t i = 0; i < m_targetArgs.size() && m_targetTailSize + i < numColumns; ++i)
+		{
+			std::string const slotStr = m_targetArgs[i].isJunk() ? std::string(1, junkSymbol) : slotToString(m_targetArgs[i]);
+			columnWidths[m_targetTailSize + i] = std::max(columnWidths[m_targetTailSize + i], slotStr.size() + 1);
+		}
+
 		bool const hasExcess = maxStackDepth > m_targetStackSize;
 
-		emitHeader(maxStackDepth, hasExcess);
-		emitSeparatorLine(maxStackDepth, hasExcess);
+		emitHeader(hasExcess, columnWidths);
+		emitSeparatorLine(hasExcess, columnWidths);
 		for (auto const& entry: m_entries)
-			emitDataRow(entry, hasExcess);
+			emitDataRow(entry, hasExcess, columnWidths);
 		if (m_truncated)
 			m_out << fmt::format("{:>{}}", "...", operationColumnWidth) << "|\n";
-		emitSeparatorLine(maxStackDepth, hasExcess);
-		emitTargetRow(hasExcess);
+		emitSeparatorLine(hasExcess, columnWidths);
+		emitTargetRow(hasExcess, columnWidths);
 	}
 
 private:
@@ -332,29 +346,29 @@ private:
 			m_out << ' ' << _junction;
 	}
 
-	void emitHeader(size_t const _maxStackDepth, bool const _hasExcess) const
+	void emitHeader(bool const _hasExcess, std::vector<std::size_t> const& _columnWidths) const
 	{
 		m_out << fmt::format("{:>{}}", "", operationColumnWidth) << "|";
-		for (size_t i = 0; i < _maxStackDepth; ++i)
+		for (std::size_t i = 0; i < _columnWidths.size(); ++i)
 		{
 			emitSeparator(i, _hasExcess, '|');
-			m_out << fmt::format("{:>{}}", i, slotColumnWidth);
+			m_out << fmt::format("{:>{}}", i, _columnWidths[i]);
 		}
 		m_out << "\n";
 	}
 
-	void emitSeparatorLine(size_t const _maxStackDepth, bool const _hasExcess) const
+	void emitSeparatorLine(bool const _hasExcess, std::vector<std::size_t> const& _columnWidths) const
 	{
 		m_out << fmt::format("{:>{}}", "", operationColumnWidth) << '+';
-		for (size_t i = 0; i < _maxStackDepth; ++i)
+		for (std::size_t i = 0; i < _columnWidths.size(); ++i)
 		{
 			emitSeparator(i, _hasExcess, '+');
-			m_out << std::string(slotColumnWidth, '-');
+			m_out << std::string(_columnWidths[i], '-');
 		}
 		m_out << '\n';
 	}
 
-	void emitDataRow(TraceEntry const& _entry, bool const _hasExcess) const
+	void emitDataRow(TraceEntry const& _entry, bool const _hasExcess, std::vector<std::size_t> const& _columnWidths) const
 	{
 		m_out << fmt::format("{:>{}}", _entry.operation, operationColumnWidth) << "|";
 		for (size_t i = 0; i < _entry.stackAfter.size(); ++i)
@@ -362,18 +376,21 @@ private:
 			emitSeparator(i, _hasExcess, '|');
 			auto const& slot = _entry.stackAfter[i];
 			std::string slotStr = slot.isJunk() ? std::string(1, junkSymbol) : slotToString(slot);
-			m_out << fmt::format("{:>{}}", slotStr, slotColumnWidth);
+			m_out << fmt::format("{:>{}}", slotStr, _columnWidths[i]);
 		}
 		m_out << '\n';
 	}
 
-	void emitTargetRow(bool const _hasExcess) const
+	void emitTargetRow(bool const _hasExcess, std::vector<size_t> const& _columnWidths) const
 	{
 		m_out << fmt::format("{:>{}}", "(target)", operationColumnWidth) << "|";
 
 		// Print tail region with set notation
 		if (m_targetTailSize > 0 && !(m_targetTail.empty() && m_targetArgs.empty()))
 		{
+			std::size_t tailWidth = 0;
+			for (std::size_t i = 0; i < m_targetTailSize; ++i)
+				tailWidth += _columnWidths[i];
 			std::string const tailSetStr = fmt::format(
 				"{{{}}}",
 				fmt::join(
@@ -383,7 +400,7 @@ private:
 					", "
 				)
 			);
-			m_out << fmt::format("{:>{}}", tailSetStr, m_targetTailSize * slotColumnWidth);
+			m_out << fmt::format("{:>{}}", tailSetStr, tailWidth);
 		}
 
 		// Args separator
@@ -391,10 +408,11 @@ private:
 			m_out << " |";
 
 		// Print args region
-		for (auto const& slot: m_targetArgs)
+		for (std::size_t i = 0; i < m_targetArgs.size(); ++i)
 		{
+			auto const& slot = m_targetArgs[i];
 			std::string slotStr = slot.isJunk() ? std::string(1, junkSymbol) : slotToString(slot);
-			m_out << fmt::format("{:>{}}", slotStr, slotColumnWidth);
+			m_out << fmt::format("{:>{}}", slotStr, _columnWidths[m_targetTailSize + i]);
 		}
 
 		// Excess separator
