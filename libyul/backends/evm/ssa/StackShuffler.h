@@ -135,13 +135,20 @@ private:
 };
 }
 
+struct StackShufflerResult
+{
+	enum class Status { Continue, Admissible, StackTooDeep, MaxIterationsReached };
+	Status status = Status::Admissible;
+	StackSlot culprit = StackSlot::makeJunk();
+};
+
 template<StackManipulationCallbackConcept Callback, std::size_t ReachableStackDepth=16>
 class StackShuffler
 {
 	using Slot = StackSlot;
 
 public:
-	static void shuffle(
+	[[nodiscard]] static StackShufflerResult shuffle(
 		Stack<Callback>& _stack,
 		StackData const& _args,
 		LivenessAnalysis::LivenessData const& _liveOut,
@@ -161,61 +168,79 @@ public:
 
 		static std::size_t constexpr maxIterations = 1000;
 		std::size_t i = 0;
-		while (i < maxIterations)
+		while (true)
 		{
 			detail::State const state(_stack.data(), target, ReachableStackDepth);
-			if (!shuffleStep(_stack, state))
+			auto result = shuffleStep(_stack, state);
+			if (result.status == StackShufflerResult::Status::Admissible)
 			{
 				yulAssert(state.admissible());
-				break;
+				return result;
 			}
+			if (result.status == StackShufflerResult::Status::StackTooDeep)
+				return result;
+			yulAssert(result.status == StackShufflerResult::Status::Continue);
 			++i;
+			if (i == maxIterations)
+			{
+				result.status = StackShufflerResult::Status::MaxIterationsReached;
+				return result;
+			}
 		}
-
-		yulAssert(i < maxIterations, fmt::format("Maximum iterations reached on {}", stackToString(_stack.data())));
+		yulAssert(false);
 	}
 
-	static void shuffle(
+	[[nodiscard]] static StackShufflerResult shuffle(
 		Stack<Callback>& _stack,
 		StackData const& _target
 	)
 	{
-		shuffle(_stack, _target, {}, _target.size());
+		return shuffle(_stack, _target, {}, _target.size());
 	}
 
 private:
-	/// Make a local step in stack space that should bring us closer to the target. Returns true if more shuffling
-	/// is required, returns false if finished.
-	static bool shuffleStep(Stack<Callback>& _stack, detail::State const& _state)
+	struct ShuffleHelperResult
+	{
+		enum class Status { NoAction, StackModified, StackTooDeep };
+		Status status = Status::NoAction;
+		StackSlot culprit = StackSlot::makeJunk();
+	};
+
+	/// Make a local step in stack space that should bring us closer to the target.
+	static StackShufflerResult shuffleStep(Stack<Callback>& _stack, detail::State const& _state)
 	{
 		// if the stack is too large, we try to shrink it
 		if (_stack.size() > _state.target().size)
 		{
 			if (shrinkStack(_stack, _state))
-				return true;
+				return {StackShufflerResult::Status::Continue};
 			// couldn't shrink to required size, need to spill to memory or increase target size
-			yulAssert(false, "stack too deep");
+			return {StackShufflerResult::Status::StackTooDeep, _stack.top()};
 		}
 		yulAssert(_stack.size() <= _state.target().size, "I1 violated: Stack size too large");
 
 		if (_state.willRequireShrinking())
 			if (shrinkStack(_stack, _state))
-				return true;
+				return {StackShufflerResult::Status::Continue};
 
 		// after this, all current slots are either in acceptable positions or at least dup-reachable
 		if (auto unreachableOffset = allNecessarySlotsReachableOrFinal(_stack, _state))
 		{
 			// !allNecessarySlotsReachableOrFinal(ops) ≡ ¬(∀s: reachable(s) ∨ final(s)) ≡ ∃s: ¬reachable(s) ∧ ¬final(s)
 			if (shrinkStack(_stack, _state))
-				return true;
+				return {StackShufflerResult::Status::Continue};
 
-			yulAssert(false, fmt::format("stack too deep, couldn't reach offset {}", unreachableOffset->value));
+			return {StackShufflerResult::Status::StackTooDeep, _stack[*unreachableOffset]};
 		}
 
 		// this will either grow the tail as needed, swap down something from args that needs to be in the tail,
-		// or return false when there's nothing to be done
-		if (fixTailSlot(_stack, _state))
-			return true;
+		// or report NoAction when there's nothing to be done
+		if (auto result = fixTailSlot(_stack, _state); result.status != ShuffleHelperResult::Status::NoAction)
+		{
+			if (result.status == ShuffleHelperResult::Status::StackTooDeep)
+				return {StackShufflerResult::Status::StackTooDeep, result.culprit};
+			return {StackShufflerResult::Status::Continue};
+		}
 
 		// fixing tail slot fills up the tail so that now the stack must reach into the args region but also not
 		// exceed it as per our first invariant
@@ -223,22 +248,26 @@ private:
 
 		// if the stack reaches into the args region try fixing a slot in there until there's nothing left to be fixed
 		// within the target size constraints
-		if (fixArgsSlot(_stack, _state))
-			return true;
+		if (auto result = fixArgsSlot(_stack, _state); result.status != ShuffleHelperResult::Status::NoAction)
+		{
+			if (result.status == ShuffleHelperResult::Status::StackTooDeep)
+				return {StackShufflerResult::Status::StackTooDeep, result.culprit};
+			return {StackShufflerResult::Status::Continue};
+		}
 
 		// if there are no args, we should be done now
 		if (_state.target().args.empty())
-			return false;
+			return {StackShufflerResult::Status::Admissible};
 		yulAssert(_stack.size() == _state.target().size);
 
 		// check whether we are done
 		if (_state.admissible())
-			return false;
+			return {StackShufflerResult::Status::Admissible};
 
 		// We couldn't improve the args tail or args situation, and we are not admissible yet, so try to reduce the
 		// stack size and pop something that we don't need so we make space to dup/push stuff within target size
 		if (shrinkStack(_stack, _state))
-			return true;
+			return {StackShufflerResult::Status::Continue};
 
 		yulAssert(false, "reached final and forbidden state");
 	}
@@ -281,7 +310,7 @@ private:
 	}
 
 	/// Dups the deepest reachable slot in the tail that is required in args
-	static bool dupDeepestRelevantTailSlot(Stack<Callback>& _stack, detail::State const& _state)
+	static ShuffleHelperResult dupDeepestRelevantTailSlot(Stack<Callback>& _stack, detail::State const& _state)
 	{
 		// dup up the deepest slot that is required in args (or compress if unreachable)
 		for (StackOffset offset: _state.stackRange())
@@ -296,26 +325,26 @@ private:
 				if (_stack.dupReachable(offset))
 				{
 					_stack.dup(offset);
-					return true;
+					return {ShuffleHelperResult::Status::StackModified};
 				}
 
 				// try to compress
 				if (shrinkStack(_stack, _state))
-					return true;
+					return {ShuffleHelperResult::Status::StackModified};
 
-				yulAssert(false, fmt::format("Stack too deep: can't reach slot at offset {}", offset.value));
+				return {ShuffleHelperResult::Status::StackTooDeep, _stack[offset]};
 			}
 		}
-		return false;
+		return {ShuffleHelperResult::Status::NoAction};
 	}
 
 	/// If dupping an ideal slot causes a slot that will still be required to become unreachable, then dup
 	/// the latter slot first
-	static bool dupDeepSlotIfRequired(Stack<Callback>& _stack, detail::State const& _state)
+	static ShuffleHelperResult dupDeepSlotIfRequired(Stack<Callback>& _stack, detail::State const& _state)
 	{
 		// Check if the stack is large enough for anything to potentially become unreachable.
 		if (_stack.size() < ReachableStackDepth - 1)
-			return false;
+			return {ShuffleHelperResult::Status::NoAction};
 		// Check whether any deep slot might still be needed later (i.e. we still need to reach it with a DUP or SWAP).
 		for (StackOffset sourceOffset{0u}; sourceOffset < _stack.size() - (ReachableStackDepth - 1); ++sourceOffset.value)
 		{
@@ -344,13 +373,13 @@ private:
 				{
 					// top can go into the tail bit, swap it down
 					_stack.swap(sourceOffset);
-					return true;
+					return {ShuffleHelperResult::Status::StackModified};
 				}
 				else
 				{
 					// we need more of the slot that is about to go out of reach, dup it
 					_stack.dup(sourceOffset);
-					return true;
+					return {ShuffleHelperResult::Status::StackModified};
 				}
 			}
 			else
@@ -359,25 +388,25 @@ private:
 				if (_stack.isValidSwapTarget(sourceOffset) && _state.isSafeToSwapWithTop(sourceOffset))
 				{
 					_stack.swap(sourceOffset);
-					return true;
+					return {ShuffleHelperResult::Status::StackModified};
 				}
 				// the slot we need something in the args region of is unreachable, try compressing the stack,
 				// first looking at the top
 				if (shrinkStack(_stack, _state))
-					return true;
+					return {ShuffleHelperResult::Status::StackModified};
 
-				yulAssert(false, fmt::format("Stack too deep, can't reach slot at depth {}", depth->value));
+				return {ShuffleHelperResult::Status::StackTooDeep, _stack.slot(*depth)};
 			}
 		}
-		return false;
+		return {ShuffleHelperResult::Status::NoAction};
 	}
 
 	/// Tries to fix a slot in the args section of the stack
-	static bool fixArgsSlot(Stack<Callback>& _stack, detail::State const& _state)
+	static ShuffleHelperResult fixArgsSlot(Stack<Callback>& _stack, detail::State const& _state)
 	{
 		yulAssert(_stack.size() <= _state.target().size, "this method assumes that the stack isn't too large");
 		if (_stack.size() < _state.target().tailSize)
-			return false;
+			return {ShuffleHelperResult::Status::NoAction};
 
 		// if we have at least one slot in the args section, try to fix something there
 		if (_stack.size() > _state.target().tailSize)
@@ -398,28 +427,28 @@ private:
 						if (_stack.isValidSwapTarget(offset) && _state.isArgsCompatible(offset, stackTop))
 						{
 							_stack.swap(offset);
-							return true;
+							return {ShuffleHelperResult::Status::StackModified};
 						}
 					// otherwise try swapping it with something that needs to go into args
 					for (StackOffset offset: _state.stackTailRange())
 						if (_stack.isValidSwapTarget(offset) && _state.countInArgs(_stack[offset]) < _state.targetArgsCount(_stack[offset]))
 						{
 							_stack.swap(offset);
-							return true;
+							return {ShuffleHelperResult::Status::StackModified};
 						}
 					// otherwise try swapping it with something that can be popped
 					for (StackOffset offset: _state.stackTailRange())
 						if (_stack.isValidSwapTarget(offset) && _stack.canBeFreelyGenerated(_stack[offset]) && !_stack[offset].isLiteralValueID())
 						{
 							_stack.swap(offset);
-							return true;
+							return {ShuffleHelperResult::Status::StackModified};
 						}
 					// otherwise try swapping it with a literal
 					for (StackOffset offset: _state.stackTailRange())
 						if (_stack.isValidSwapTarget(offset) && _stack[offset].isLiteralValueID())
 						{
 							_stack.swap(offset);
-							return true;
+							return {ShuffleHelperResult::Status::StackModified};
 						}
 				}
 				// try finding a slot that is compatible with the top and also admits the current top:
@@ -436,7 +465,7 @@ private:
 					)
 					{
 						_stack.swap(offset);
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 
 				// try finding a slot in args that wants to have the top, swap that
@@ -450,7 +479,7 @@ private:
 					)
 					{
 						_stack.swap(offset);
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 
 				// try swapping top with a tail slot that has what we need at top
@@ -467,7 +496,7 @@ private:
 					)
 					{
 						_stack.swap(tailOffset);
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 			}
 
@@ -499,7 +528,7 @@ private:
 									_stack.swap(offset);
 							// bring slot at offset into fixed position
 							_stack.swap(targetOffset);
-							return true;
+							return {ShuffleHelperResult::Status::StackModified};
 						}
 				}
 			}
@@ -508,8 +537,8 @@ private:
 		// dup up whatever is missing
 		if (_stack.size() < _state.target().size)
 		{
-			if (dupDeepSlotIfRequired(_stack, _state))
-				return true;
+			if (auto result = dupDeepSlotIfRequired(_stack, _state); result.status != ShuffleHelperResult::Status::NoAction)
+				return result;
 
 			{
 				StackOffset const targetOffset{_stack.size()};
@@ -519,13 +548,13 @@ private:
 					if (!sourceDepth)
 					{
 						_stack.push(_state.targetArg(targetOffset));
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 
 					if (!_stack.dupReachable(*sourceDepth))
-						yulAssert(false, fmt::format("todo: stack too deep handling, couldn't dup up arg {}", slotToString(_state.targetArg(_stack.depthToOffset(*sourceDepth)))));
+						return {ShuffleHelperResult::Status::StackTooDeep, _state.targetArg(targetOffset)};
 					_stack.dup(*sourceDepth);
-					return true;
+					return {ShuffleHelperResult::Status::StackModified};
 				}
 			}
 
@@ -541,13 +570,14 @@ private:
 						if (_stack.dupReachable(*sourceDepth))
 						{
 							_stack.dup(*sourceDepth);
-							return true;
+							return {ShuffleHelperResult::Status::StackModified};
 						}
-						yulAssert(false, "stack too deep handling");
+						if (!_stack.canBeFreelyGenerated(arg))
+							return {ShuffleHelperResult::Status::StackTooDeep, arg};
 					}
 					yulAssert(_stack.canBeFreelyGenerated(arg));
 					_stack.push(arg);
-					return true;
+					return {ShuffleHelperResult::Status::StackModified};
 				}
 			}
 
@@ -557,7 +587,7 @@ private:
 			else
 				// If no suitable slot found, push junk
 				_stack.push(Slot::makeJunk());
-			return true;
+			return {ShuffleHelperResult::Status::StackModified};
 		}
 
 		// if we're at size and have to push or dup something to satisfy args
@@ -570,31 +600,37 @@ private:
 					// within dup-reach or we can just push it
 					if (auto depth = _stack.findSlotDepth(arg))
 					{
-						yulAssert(!_stack.isBeyondSwapRange(*depth));
+						if (_stack.isBeyondSwapRange(*depth))
+							return {ShuffleHelperResult::Status::StackTooDeep, arg};
 						// if we can't outright dup the slot, let's shrink the stack first
 						if (!_stack.dupReachable(*depth))
 						{
-							yulAssert(shrinkStack(_stack, _state), "stack too deep, need to spill arg to memory");
-							return true;
+							if (!shrinkStack(_stack, _state))
+								return {ShuffleHelperResult::Status::StackTooDeep, arg};
+							return {ShuffleHelperResult::Status::StackModified};
 						}
 						_stack.dup(*depth);
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 					else
 					{
-						yulAssert(_stack.canBeFreelyGenerated(arg));
-						if (!dupDeepSlotIfRequired(_stack, _state))
+						if (!_stack.canBeFreelyGenerated(arg))
+							return {ShuffleHelperResult::Status::StackTooDeep, arg};
+						auto result = dupDeepSlotIfRequired(_stack, _state);
+						if (result.status == ShuffleHelperResult::Status::StackTooDeep)
+							return result;
+						if (result.status == ShuffleHelperResult::Status::NoAction)
 							_stack.push(arg);
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 				}
 		}
-		return false;
+		return {ShuffleHelperResult::Status::NoAction};
 	}
 
 	/// Grows the tail if too small, otherwise tries swapping something down from args if its required in tail but not
 	/// there yet.
-	static bool fixTailSlot(Stack<Callback>& _stack, detail::State const& _state)
+	static ShuffleHelperResult fixTailSlot(Stack<Callback>& _stack, detail::State const& _state)
 	{
 		yulAssert(_stack.size() <= _state.target().size, "this method assumes that the stack isn't exceeding target size");
 		for (StackOffset offset: _state.stackArgsRange() | ranges::views::reverse)
@@ -621,7 +657,7 @@ private:
 							_stack.swap(offset);
 						// swap offset slot down into tail
 						_stack.swap(tailOffset);
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 				}
 				// find the lowest swappable slot in tail that can be popped but is no literal, swap
@@ -637,7 +673,7 @@ private:
 							_stack.swap(offset);
 						// swap offset slot down into tail
 						_stack.swap(tailOffset);
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 				// find the lowest swappable slot in tail that is a literal, swap
 				for (StackOffset tailOffset: _state.stackTailRange())
@@ -651,22 +687,22 @@ private:
 							_stack.swap(offset);
 						// swap offset slot down into tail
 						_stack.swap(tailOffset);
-						return true;
+						return {ShuffleHelperResult::Status::StackModified};
 					}
 				// we needed to bring the slot into tail but couldn't, not enough stack target space -> spill to memory
-				yulAssert(false, "stack too deep: couldn't swap args slot into tail without moving something else out that is required there");
+				return {ShuffleHelperResult::Status::StackTooDeep, _stack[offset]};
 			}
 		}
 
 		if (_stack.size() < _state.target().tailSize)
 		{
 			// if something is on the verge of going out of scope by duping something, dup that first
-			if (dupDeepSlotIfRequired(_stack, _state))
-				return true;
+			if (auto result = dupDeepSlotIfRequired(_stack, _state); result.status != ShuffleHelperResult::Status::NoAction)
+				return result;
 
 			// dup up the deepest slot that needs to go into args so we avoid having to fish it back up later
-			if (dupDeepestRelevantTailSlot(_stack, _state))
-				return true;
+			if (auto result = dupDeepestRelevantTailSlot(_stack, _state); result.status != ShuffleHelperResult::Status::NoAction)
+				return result;
 
 			// Try to dup the optimal slot based on liveness analysis
 			if (auto slotToDup = selectOptimalSlotToDup(_stack, _state))
@@ -674,9 +710,9 @@ private:
 			else
 				// If no suitable slot found, push junk
 				_stack.push(Slot::makeJunk());
-			return true;
+			return {ShuffleHelperResult::Status::StackModified};
 		}
-		return false;
+		return {ShuffleHelperResult::Status::NoAction};
 	}
 
 	/// Tries to compress the stack

@@ -11,3 +11,4 @@ targetStackSize: 4
 //        SWAP3|      * |   lit2     v2     v0
 //             +------- +---------------------
 //     (target)|     {} |   lit2     v2     v0
+// Status: Admissible

@@ -106,7 +106,8 @@ std::size_t solidity::yul::ssa::findOptimalTargetSize
 	{
 		data = _stackData;
 		Stack<OpsCountingCallbacks> countOpsStack(data, {});
-		StackShuffler<OpsCountingCallbacks>::shuffle(countOpsStack, _targetArgs, _targetLiveOut, _targetSize);
+		auto const shuffleResult = StackShuffler<OpsCountingCallbacks>::shuffle(countOpsStack, _targetArgs, _targetLiveOut, _targetSize);
+		yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 		yulAssert(countOpsStack.size() == _targetSize);
 		return countOpsStack.callbacks().numOps;
 	};

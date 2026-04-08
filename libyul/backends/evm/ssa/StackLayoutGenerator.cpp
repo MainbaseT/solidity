@@ -192,12 +192,13 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 			{
 				auto proposalCopy = proposals[j];
 				Stack<GasAccumulatingCallbacks> stack(proposalCopy, {.cfg = m_cfg});
-				StackShuffler<GasAccumulatingCallbacks>::shuffle(
+				auto const shuffleResult = StackShuffler<GasAccumulatingCallbacks>::shuffle(
 					stack,
 					proposals[i],
 					{},
 					proposals[i].size()
 				);
+				yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 				cumulativeCost += stack.callbacks().opGas;
 			}
 			cumulativeCosts[i] = cumulativeCost;
@@ -259,12 +260,15 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 			junkCanBeAdded,
 			m_hasFunctionReturnLabel
 		);
-		StackShuffler<StackType::Callbacks>::shuffle(
-			stack,
-			requiredStackTop,
-			opLiveOutWithoutOutputs,
-			targetSize
-		);
+		{
+			auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(
+				stack,
+				requiredStackTop,
+				opLiveOutWithoutOutputs,
+				targetSize
+			);
+			yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
+		}
 
 		blockLayout.operationIn.push_back(currentStackData);
 		for (std::size_t i = 0; i < requiredStackTop.size(); ++i)
@@ -293,9 +297,10 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 						false,
 						m_hasFunctionReturnLabel
 					);
-					StackShuffler<StackType::Callbacks>::shuffle(
+					auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(
 						stack, {condition}, blockLiveOut, targetSize
 					);
+					yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 				}
 
 				yulAssert(!stack.empty() && stack.top().isValueID() && stack.top().valueID() == _cJump.condition);
@@ -317,7 +322,8 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				// in case there are return values, let's bring the function return label to the top
 				StackData returnStack = _functionReturn.returnValues | ranges::views::transform(StackSlot::makeValueID) | ranges::to<std::vector>;
 				returnStack.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
-				StackShuffler<StackType::Callbacks>::shuffle(stack, returnStack);
+				auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(stack, returnStack);
+				yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 				blockLayout.exitIn = currentStackData;
 			},
 			[&](SSACFG::BasicBlock::Jump const& _jump) {
