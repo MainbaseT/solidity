@@ -19,6 +19,7 @@
 #pragma once
 
 #include <libyul/backends/evm/ssa/LivenessAnalysis.h>
+#include <libyul/backends/evm/ssa/StackToMemorySpilling.h>
 #include <libyul/backends/evm/ssa/Stack.h>
 
 #include <boost/container/flat_map.hpp>
@@ -36,14 +37,31 @@ namespace solidity::yul::ssa
 
 namespace detail
 {
+
+inline bool slotIsSpilled(StackSlot const& _slot, SpilledVariables const* const _spilledVariables)
+{
+	return _spilledVariables && _slot.isValueID() && _spilledVariables->isSpilled(_slot.valueID());
+}
+
+inline bool slotCanBeLoadedOrPushed(StackSlot const& _slot, SpilledVariables const* const _spilledVariables)
+{
+	return Stack<>::canBeFreelyGenerated(_slot) || slotIsSpilled(_slot, _spilledVariables);
+}
+
 /// Contains information about the shuffling target, aggregates over args and live out to
 /// provide a lower bound for the slot distribution.
 struct Target
 {
-	Target(StackData const& _args, LivenessAnalysis::LivenessData const& _liveOut, std::size_t _targetSize);
+	Target(
+		StackData const& _args,
+		LivenessAnalysis::LivenessData const& _liveOut,
+		std::size_t _targetSize,
+		SpilledVariables const* _spilledVariables = nullptr
+	);
 
 	StackData const& args;
 	LivenessAnalysis::LivenessData const& liveOut;
+	SpilledVariables const* const spilledVariables;
 	std::size_t const size;
 	std::size_t const tailSize;
 	boost::container::flat_map<StackSlot, size_t> minCount;
@@ -52,7 +70,7 @@ struct Target
 class State
 {
 public:
-	State(StackData const& _stackData, Target const& _target, std::size_t _reachableStackDepth);
+	State(StackData const& _stackData, Target const& _target, SpilledVariables const* const _spilledVariables, std::size_t _reachableStackDepth);
 
 	std::size_t size() const;
 	/// How many of `_slot` do we have on stack
@@ -128,9 +146,20 @@ public:
 	/// Depth of the deepest arg slot incompatible with target or Nothing for no incompatibility in current state
 	std::optional<StackDepth> findDeepestIncorrectArgSlot() const;
 
+	bool slotCanBeLoadedOrPushed(StackSlot const& _slot) const
+	{
+		return detail::slotCanBeLoadedOrPushed(_slot, m_spilledVariables);
+	}
+
+	bool slotIsSpilled(StackSlot const& _slot) const
+	{
+		return detail::slotIsSpilled(_slot, m_spilledVariables);
+	}
+
 private:
 	StackData const& m_stackData;
 	Target const& m_target;
+	SpilledVariables const* const m_spilledVariables;
 	std::size_t const m_reachableStackDepth;
 	boost::container::flat_map<StackSlot, size_t> m_histogramTail;
 	boost::container::flat_map<StackSlot, size_t> m_histogramArgs;
@@ -156,25 +185,32 @@ public:
 		Stack<Callback>& _stack,
 		StackData const& _args,
 		LivenessAnalysis::LivenessData const& _liveOut,
-		std::size_t _targetStackSize
+		std::size_t _targetStackSize,
+		SpilledVariables const* const _spilledVariables = nullptr
 	)
 	{
-		detail::Target const target(_args, _liveOut, _targetStackSize);
-		yulAssert(_liveOut.size() <= target.size, "not enough tail space");
+		detail::Target const target(_args, _liveOut, _targetStackSize, _spilledVariables);
+		// If the caller has wired up a spill set, the shuffler can reduce the effective liveOut
+		// size by spilling; otherwise the liveOut must fit into the target up front.
+		if (!_spilledVariables)
+			yulAssert(_liveOut.size() <= target.size, "not enough tail space");
 		{
 			// check that all required values are on stack
-			detail::State const state(_stack.data(), target, ReachableStackDepth);
+			detail::State const state(_stack.data(), target, _spilledVariables, ReachableStackDepth);
 			for (auto const& liveVariable: _liveOut | ranges::views::keys | ranges::views::transform(Slot::makeValueID))
-				yulAssert(!_stack.canBeFreelyGenerated(liveVariable) && ranges::contains(_stack.data(), liveVariable));
+				yulAssert(
+					!_stack.canBeFreelyGenerated(liveVariable) &&
+					(ranges::contains(_stack.data(), liveVariable) || detail::slotIsSpilled(liveVariable, _spilledVariables))
+				);
 			for (auto const& arg: _args)
-				yulAssert(_stack.canBeFreelyGenerated(arg) || ranges::contains(_stack.data(), arg));
+				yulAssert(detail::slotCanBeLoadedOrPushed(arg, _spilledVariables) || ranges::contains(_stack.data(), arg));
 		}
 
 		static std::size_t constexpr maxIterations = 1000;
 		std::size_t i = 0;
 		while (true)
 		{
-			detail::State const state(_stack.data(), target, ReachableStackDepth);
+			detail::State const state(_stack.data(), target, _spilledVariables, ReachableStackDepth);
 			auto result = shuffleStep(_stack, state);
 			if (result.status == StackShufflerResult::Status::Admissible)
 			{
@@ -228,13 +264,13 @@ private:
 				return {StackShufflerResult::Status::Continue};
 
 		// after this, all current slots are either in acceptable positions or at least dup-reachable
-		if (auto unreachableOffset = allNecessarySlotsReachableOrFinal(_stack, _state))
+		if (auto culprit = allNecessarySlotsReachableOrFinal(_stack, _state))
 		{
 			// !allNecessarySlotsReachableOrFinal(ops) ≡ ¬(∀s: reachable(s) ∨ final(s)) ≡ ∃s: ¬reachable(s) ∧ ¬final(s)
 			if (shrinkStack(_stack, _state))
 				return {StackShufflerResult::Status::Continue};
 
-			return {StackShufflerResult::Status::StackTooDeep, _stack[*unreachableOffset]};
+			return {StackShufflerResult::Status::StackTooDeep, _stack.top()};
 		}
 
 		// this will either grow the tail as needed, swap down something from args that needs to be in the tail,
@@ -272,6 +308,18 @@ private:
 		// stack size and pop something that we don't need so we make space to dup/push stuff within target size
 		if (shrinkStack(_stack, _state))
 			return {StackShufflerResult::Status::Continue};
+
+		// if we couldn't shrink the stack we surface this failed state as stack too deep
+		for (StackOffset const offset: _state.stackRange() | ranges::views::reverse)
+		{
+			Slot const& candidate = _stack[offset];
+			if (
+				candidate.isValueID() &&
+				!candidate.isLiteralValueID() &&
+				!_state.slotIsSpilled(candidate)
+			)
+				return {StackShufflerResult::Status::StackTooDeep, candidate};
+		}
 
 		yulAssert(false, "reached final and forbidden state");
 	}
@@ -580,10 +628,10 @@ private:
 						_stack.dup(*sourceDepth);
 						return {ShuffleHelperResult::Status::StackModified};
 					}
-					if (!_stack.canBeFreelyGenerated(arg))
+					if (!_state.slotCanBeLoadedOrPushed(arg))
 						return {ShuffleHelperResult::Status::StackTooDeep, arg};
 				}
-				yulAssert(_stack.canBeFreelyGenerated(arg));
+				yulAssert(_state.slotCanBeLoadedOrPushed(arg));
 				_stack.push(arg);
 				return {ShuffleHelperResult::Status::StackModified};
 			}
@@ -621,7 +669,7 @@ private:
 					}
 					else
 					{
-						if (!_stack.canBeFreelyGenerated(arg))
+						if (!_state.slotCanBeLoadedOrPushed(arg))
 							return {ShuffleHelperResult::Status::StackTooDeep, arg};
 						auto result = dupDeepSlotIfRequired(_stack, _state);
 						if (result.status == ShuffleHelperResult::Status::StackTooDeep)
@@ -671,7 +719,7 @@ private:
 				for (StackOffset tailOffset: _state.stackTailRange())
 					if (
 						_stack.isValidSwapTarget(tailOffset) &&
-						_stack.canBeFreelyGenerated(_stack[tailOffset]) &&
+						_state.slotCanBeLoadedOrPushed(_stack[tailOffset]) &&
 						!_stack[tailOffset].isLiteralValueID()
 					)
 					{
@@ -830,8 +878,11 @@ private:
 		return false;
 	}
 
-	/// Checks if all current slots are either in a position that is compatible with the target or, if not, are dup-reachable.
-	static std::optional<StackOffset> allNecessarySlotsReachableOrFinal(Stack<Callback> const& _stack, detail::State const& _state)
+	/// Checks if all current slots are either in a position that is compatible with the target or, if not, are
+	/// dup-reachable.
+	/// Returns the culprit slot (guaranteed to be non-junk) that cannot be placed or duplicated, or `std::nullopt`
+	/// if every slot is reachable-or-final.
+	static std::optional<StackSlot> allNecessarySlotsReachableOrFinal(Stack<Callback> const& _stack, detail::State const& _state)
 	{
 		// check that args are either in position or reachable
 		for (StackOffset offset{_state.target().tailSize}; offset < _state.target().size; ++offset.value)
@@ -846,19 +897,19 @@ private:
 
 			// the target offset itself is out of swap range, we must shrink to reach it
 			if (offset.value < _stack.size() && _stack.isBeyondSwapRange(offset))
-				return offset;
+				return targetArg;
 
 			// find first occurrence of the slot
 			std::optional<StackDepth> const depth = _stack.findSlotDepth(targetArg);
 			if (!depth)
 			{
 				// if there is no occurrence of the slot anywhere, we must be able to freely generate it
-				yulAssert(_stack.canBeFreelyGenerated(targetArg));
+				yulAssert(_state.slotCanBeLoadedOrPushed(targetArg));
 			}
 			else
 			{
-				if (_stack.isBeyondSwapRange(*depth))
-					return _stack.depthToOffset(*depth);
+				if (_stack.isBeyondSwapRange(*depth) && !_state.slotCanBeLoadedOrPushed(targetArg))
+					return targetArg;
 			}
 		}
 		// distribution check: all we have to dup can be duped
@@ -875,8 +926,8 @@ private:
 				std::optional<StackDepth> depth = _stack.findSlotDepth(slotAtOffset);
 				// it must exist
 				yulAssert(depth);
-				if (!_stack.dupReachable(*depth))
-					return _stack.depthToOffset(*depth);
+				if (!_stack.dupReachable(*depth) && !_state.slotCanBeLoadedOrPushed(slotAtOffset))
+					return slotAtOffset;
 			}
 		}
 
