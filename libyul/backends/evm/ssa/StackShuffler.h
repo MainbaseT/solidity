@@ -415,42 +415,7 @@ private:
 			// if the stack top isn't where it likes to be right now, try to put it somewhere more sensible
 			if (!_state.isArgsCompatible(stackTop, stackTop))
 			{
-				// if the stack top should go into the tail but isn't there yet and we have enough of it in args
-				if (
-					_state.requiredInTail(_stack[stackTop]) &&
-					_state.countInTail(_stack[stackTop]) == 0 &&
-					_state.countInArgs(_stack[stackTop]) > _state.targetArgsCount(_stack[stackTop])
-				)
-				{
-					// try swapping it with something in the tail that also fixes the top
-					for (StackOffset offset: _state.stackTailRange())
-						if (_stack.isValidSwapTarget(offset) && _state.isArgsCompatible(offset, stackTop))
-						{
-							_stack.swap(offset);
-							return {ShuffleHelperResult::Status::StackModified};
-						}
-					// otherwise try swapping it with something that needs to go into args
-					for (StackOffset offset: _state.stackTailRange())
-						if (_stack.isValidSwapTarget(offset) && _state.countInArgs(_stack[offset]) < _state.targetArgsCount(_stack[offset]))
-						{
-							_stack.swap(offset);
-							return {ShuffleHelperResult::Status::StackModified};
-						}
-					// otherwise try swapping it with something that can be popped
-					for (StackOffset offset: _state.stackTailRange())
-						if (_stack.isValidSwapTarget(offset) && _stack.canBeFreelyGenerated(_stack[offset]) && !_stack[offset].isLiteralValueID())
-						{
-							_stack.swap(offset);
-							return {ShuffleHelperResult::Status::StackModified};
-						}
-					// otherwise try swapping it with a literal
-					for (StackOffset offset: _state.stackTailRange())
-						if (_stack.isValidSwapTarget(offset) && _stack[offset].isLiteralValueID())
-						{
-							_stack.swap(offset);
-							return {ShuffleHelperResult::Status::StackModified};
-						}
-				}
+				yulAssert(!_state.requiredInTail(_stack[stackTop]) || _state.countInTail(_stack[stackTop]) > 0);
 				// try finding a slot that is compatible with the top and also admits the current top:
 				//		- could be that the top slot is used elsewhere in the args (exclude junk)
 				//		- could be that the top slot is something that is only required in the tail
