@@ -792,7 +792,7 @@ private:
 	static std::optional<StackOffset> allNecessarySlotsReachableOrFinal(Stack<Callback> const& _stack, detail::State const& _state)
 	{
 		// check that args are either in position or reachable
-		for (StackOffset const offset: _state.stackArgsRange())
+		for (StackOffset offset{_state.target().tailSize}; offset < _state.target().size; ++offset.value)
 		{
 			if (_state.isArgsCompatible(offset, offset))
 				continue;
