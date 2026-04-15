@@ -162,7 +162,7 @@ public:
 			// check that all required values are on stack
 			detail::State const state(_stack.data(), target, ReachableStackDepth);
 			for (auto const& liveVariable: _liveOut | ranges::views::keys | ranges::views::transform(Slot::makeValueID))
-				yulAssert(_stack.canBeFreelyGenerated(liveVariable) || ranges::contains(_stack.data(), liveVariable));
+				yulAssert(!_stack.canBeFreelyGenerated(liveVariable) && ranges::contains(_stack.data(), liveVariable));
 			for (auto const& arg: _args)
 				yulAssert(_stack.canBeFreelyGenerated(arg) || ranges::contains(_stack.data(), arg));
 		}
