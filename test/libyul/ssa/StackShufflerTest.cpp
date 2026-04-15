@@ -50,6 +50,8 @@ std::string_view constexpr parserKeyInitialStack {"initial"};
 std::string_view constexpr parserKeyStackTop {"targetStackTop"};
 std::string_view constexpr parserKeyTailSet {"targetStackTailSet"};
 std::string_view constexpr parserKeyStackSize {"targetStackSize"};
+std::string_view constexpr parserKeyAllowSpilling {"allowSpilling"};
+std::string_view constexpr parserKeyInitialSpilled {"initialSpilledSet"};
 
 using Liveness = LivenessAnalysis::LivenessData;
 using Slot = StackSlot;
@@ -178,6 +180,8 @@ struct ShuffleTestInput
 	std::optional<TestStack::Data> targetStackTop;
 	Liveness targetStackTailSet{};
 	std::optional<size_t> targetStackSize;
+	bool allowSpilling = false;
+	SpilledVariables initialSpilledSet{};
 
 	bool valid() const
 	{
@@ -236,6 +240,18 @@ struct ShuffleTestInput
 				else
 					throw std::runtime_error(fmt::format("Couldn't parse targetStackSize: {}", value));
 			}
+			else if (key == parserKeyAllowSpilling)
+			{
+				if (value == "true")
+					result.allowSpilling = true;
+				else if (value == "false")
+					result.allowSpilling = false;
+				else
+					throw std::runtime_error(fmt::format("Couldn't parse allowSpilling: {}", value));
+			}
+			else if (key == parserKeyInitialSpilled)
+				for (auto const& [valueId, _]: parseLiveness(value))
+					result.initialSpilledSet.spill(valueId);
 
 		}
 
@@ -475,6 +491,31 @@ explicitly provided.)";
 	auto stackData = *testConfig.initial;
 	std::ostringstream oss;
 	StackShufflerResult shuffleResult;
+	SpilledVariables spillSet = testConfig.initialSpilledSet;
+
+	// First, when spilling is allowed, run the shuffler repeatedly without recording to determine
+	// the final spill set. Each iteration starts from the initial stack and adds the culprit of a
+	// recoverable StackTooDeep to the spill set.
+	if (testConfig.allowSpilling)
+		while (true)
+		{
+			auto scratch = *testConfig.initial;
+			TestStack stack(scratch, {});
+			auto const result = StackShuffler<StackManipulationCallbacks>::shuffle(
+				stack,
+				*testConfig.targetStackTop,
+				testConfig.targetStackTailSet,
+				*testConfig.targetStackSize,
+				&spillSet
+			);
+			if (
+				result.status != StackShufflerResult::Status::StackTooDeep
+			)
+				break;
+			spillSet.spill(result.culprit.valueID());
+		}
+
+	// Final shuffle with the (possibly pre-populated) spill set, recording the trace.
 	{
 		TraceRecorder trace(oss, *testConfig.targetStackTop, testConfig.targetStackTailSet, *testConfig.targetStackSize);
 		trace.record("(initial)", *testConfig.initial);
@@ -486,7 +527,8 @@ explicitly provided.)";
 			stack,
 			*testConfig.targetStackTop,
 			testConfig.targetStackTailSet,
-			*testConfig.targetStackSize
+			*testConfig.targetStackSize,
+			&spillSet
 		);
 		if (shuffleResult.status == StackShufflerResult::Status::MaxIterationsReached)
 			trace.truncate(30);
@@ -506,6 +548,16 @@ explicitly provided.)";
 	case StackShufflerResult::Status::Continue:
 		yulAssert(false, "Unexpected Continue status from shuffle()");
 	}
+	if (testConfig.allowSpilling)
+		oss << fmt::format(
+			"Spilled: {{{}}}\n",
+			fmt::join(
+				spillSet.spilledValues() | ranges::views::transform(
+					[](auto const& id) { return slotToString(StackSlot::makeValueID(id)); }
+				),
+				", "
+			)
+		);
 	// check stack data
 	if (shuffleResult.status == StackShufflerResult::Status::Admissible)
 	{
@@ -514,6 +566,8 @@ explicitly provided.)";
 		yulAssert(stackData.size() == *testConfig.targetStackSize);
 		for (const auto& valueID: testConfig.targetStackTailSet | ranges::views::keys)
 		{
+			if (spillSet.isSpilled(valueID))
+				continue;
 			auto const findIt = ranges::find(
 				stackData.begin(),
 				stackData.begin() + static_cast<std::ptrdiff_t>(tailSize),
