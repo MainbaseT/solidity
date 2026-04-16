@@ -471,7 +471,8 @@ private:
 			// swap up any slot in args that is out of position and has a slot available in args that it can occupy
 			for (StackOffset offset: _state.stackArgsRange())
 			{
-				bool const reachable = _stack.isValidSwapTarget(offset);
+				// when offset is already top no swap-up is needed, so it doesn't have to be a valid swap target itself
+				bool const reachable = !_stack.isBeyondSwapRange(offset);
 				bool const identical = _state.isArgsCompatible(offset, stackTop) && !_state.targetArbitrary(stackTop);
 				if (
 					reachable &&
