@@ -124,6 +124,9 @@ public:
 		return ranges::views::iota(0u, std::min(m_stackData.size(), m_reachableStackDepth)) | ranges::views::transform([&](auto _i) { return StackOffset{m_stackData.size() - _i - 1}; });
 	}
 
+	/// Depth of the deepest arg slot incompatible with target or Nothing for no incompatibility in current state
+	std::optional<StackDepth> findDeepestIncorrectArgSlot() const;
+
 private:
 	StackData const& m_stackData;
 	Target const& m_target;
@@ -505,6 +508,8 @@ private:
 			if (auto result = dupDeepSlotIfRequired(_stack, _state); result.status != ShuffleHelperResult::Status::NoAction)
 				return result;
 
+			auto const maybeIncorrectArgSlotDepth = _state.findDeepestIncorrectArgSlot();
+			if (!maybeIncorrectArgSlotDepth || maybeIncorrectArgSlotDepth->value < ReachableStackDepth - 1)
 			{
 				StackOffset const targetOffset{_stack.size()};
 				if (_state.count(_state.targetArg(targetOffset)) < _state.targetMinCount(_state.targetArg(targetOffset)))

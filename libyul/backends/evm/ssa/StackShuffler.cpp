@@ -195,3 +195,13 @@ bool State::willRequireShrinking() const
 	}
 	return deficit + size() > target().size;
 }
+
+std::optional<StackDepth> State::findDeepestIncorrectArgSlot() const
+{
+	for (StackOffset const offset: stackArgsRange())
+	{
+		if (!isArgsCompatible(offset, offset))
+			return StackDepth{m_stackData.size() - offset.value};
+	}
+	return std::nullopt;
+}
