@@ -534,22 +534,27 @@ private:
 			for (StackOffset offset{_state.target().tailSize}; offset < _state.target().size; ++offset.value)
 			{
 				Slot const& arg = _state.targetArg(offset);
-				if (!arg.isJunk() && (_state.count(arg) < _state.targetMinCount(arg) || _state.countInArgs(arg) < _state.targetArgsCount(arg)))
+				// skip this arg, if
+				if (
+					arg.isJunk() ||  // .. the target arg is junk, it doesn't matter what slot occupies it, skip
+					_state.isArgsCompatible(offset, offset) ||  // .. it's already in place
+					(_state.count(arg) >= _state.targetMinCount(arg) && _state.countInArgs(arg) >= _state.targetArgsCount(arg))  // .. we have enough of it
+				)
+					continue;
+
+				if (auto sourceDepth = _stack.findSlotDepth(arg))
 				{
-					if (auto sourceDepth = _stack.findSlotDepth(arg))
+					if (_stack.dupReachable(*sourceDepth))
 					{
-						if (_stack.dupReachable(*sourceDepth))
-						{
-							_stack.dup(*sourceDepth);
-							return {ShuffleHelperResult::Status::StackModified};
-						}
-						if (!_stack.canBeFreelyGenerated(arg))
-							return {ShuffleHelperResult::Status::StackTooDeep, arg};
+						_stack.dup(*sourceDepth);
+						return {ShuffleHelperResult::Status::StackModified};
 					}
-					yulAssert(_stack.canBeFreelyGenerated(arg));
-					_stack.push(arg);
-					return {ShuffleHelperResult::Status::StackModified};
+					if (!_stack.canBeFreelyGenerated(arg))
+						return {ShuffleHelperResult::Status::StackTooDeep, arg};
 				}
+				yulAssert(_stack.canBeFreelyGenerated(arg));
+				_stack.push(arg);
+				return {ShuffleHelperResult::Status::StackModified};
 			}
 
 			// Try to dup the optimal slot based on liveness analysis
