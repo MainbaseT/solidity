@@ -252,6 +252,7 @@ public:
 	bool dupReachable(Depth const& _depth) const noexcept { return _depth < size() && _depth.value + 1 <= reachableStackDepth; }
 	bool isValidSwapTarget(Offset const& _offset) const noexcept { return isValidSwapTarget(offsetToDepth(_offset)); }
 	bool isValidSwapTarget(Depth const& _depth) const noexcept { return _depth < size() && 1 <= _depth.value && _depth.value <= reachableStackDepth; }
+	bool isBeyondSwapRange(Offset const& _offset) const noexcept { return isBeyondSwapRange(offsetToDepth(_offset)); }
 	bool isBeyondSwapRange(Depth const& _depth) const noexcept { return _depth > reachableStackDepth; }
 
 	void declareJunk(Offset const& _offset) { (*m_data)[_offset.value] = Slot::makeJunk(); }
