@@ -807,12 +807,18 @@ private:
 		{
 			if (_state.isArgsCompatible(offset, offset))
 				continue;
+
+			auto const& targetArg = _state.targetArg(offset);
+			// if the target arg is junk, we can simply push0 and it's fine
+			if (targetArg.isJunk())
+				continue;
+
 			// find first occurrence of the slot
-			std::optional<StackDepth> depth = _stack.findSlotDepth(_state.targetArg(offset));
+			std::optional<StackDepth> const depth = _stack.findSlotDepth(targetArg);
 			if (!depth)
 			{
 				// if there is no occurrence of the slot anywhere, we must be able to freely generate it
-				yulAssert(_stack.canBeFreelyGenerated(_state.targetArg(offset)));
+				yulAssert(_stack.canBeFreelyGenerated(targetArg));
 			}
 			else
 			{
