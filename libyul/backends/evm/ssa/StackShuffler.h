@@ -762,16 +762,19 @@ private:
 				bool const notInPosition = !_state.isArgsCompatible(_offset, _offset);
 				bool const isJunk = slot.isJunk();
 				bool const hasSurplus = _state.count(slot) > _state.targetMinCount(slot);
+				bool const hasReachableDuplicate = _state.countReachable(slot) > 1;
 				bool const canBeFreelyGenerated = _stack.canBeFreelyGenerated(slot);
 				bool const isLit = slot.isLiteralValueID();
 
 				if (isJunk && notInPosition)
-					return 4;
+					return 5;
 				if (canBeFreelyGenerated && !isLit && notInPosition)
-					return 3;
+					return 4;
 				if (hasSurplus)
-					return 2;
+					return 3;
 				if (canBeFreelyGenerated)
+					return 2;
+				if (hasReachableDuplicate)
 					return 1;
 				return 0;
 			};

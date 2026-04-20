@@ -5,6 +5,36 @@ targetStackSize: 20
 //             |      0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
 //             +--------------------------------------------------------------------------------------------------------------------------------------------
 //    (initial)|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
+//          ...|
 //             +--------------------------------------------------------------------------------------------------------------------------------------------
 //     (target)|     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v1
-// Status: StackTooDeep (culprit: v1)
+// Status: MaxIterationsReached
