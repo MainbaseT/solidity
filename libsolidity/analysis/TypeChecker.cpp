@@ -3130,15 +3130,21 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 				m_errorReporter.fatalTypeError(
 					4994_error,
 					_memberAccess.location(),
-					"Member \"" + memberName + "\" is not available in " +
-					owningObjectType->humanReadableName() +
-					" outside of storage."
+
+					fmt::format(
+						R"(Member "{}" is not available in {} outside of storage.)",
+						memberName,
+						owningObjectType->humanReadableName()
+					)
 				);
 		}
 
 		auto [errorId, description] = [&]() -> std::tuple<ErrorId, std::string> {
-			std::string errorMsg = "Member \"" + memberName + "\" not found or not visible "
-				"after argument-dependent lookup in " + owningObjectType->humanReadableName() + ".";
+			std::string errorMsg = fmt::format(
+				R"(Member "{}" not found or not visible after argument-dependent lookup in {}.)",
+				memberName,
+				owningObjectType->humanReadableName()
+			);
 
 			if (auto const* funType = dynamic_cast<FunctionType const*>(owningObjectType))
 			{
@@ -3149,15 +3155,18 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 					if (funType->kind() == FunctionType::Kind::Creation)
 						return {
 							8827_error,
-							"Constructor for " + t.front()->humanReadableName() + " must be payable for member \"value\" to be available."
+							fmt::format(
+								R"(Constructor for {} must be payable for member "value" to be available.)",
+								t.front()->humanReadableName()
+							)
 						};
 					else if (
 						funType->kind() == FunctionType::Kind::DelegateCall ||
 						funType->kind() == FunctionType::Kind::BareDelegateCall
 					)
-						return { 8477_error, "Member \"value\" is not allowed in delegated calls due to \"msg.value\" persisting." };
+						return {8477_error, R"(Member "value" is not allowed in delegated calls due to "msg.value" persisting.)"};
 					else
-						return { 8820_error, "Member \"value\" is only available for payable functions." };
+						return {8820_error, R"(Member "value" is only available for payable functions.)"};
 				}
 				else if (
 					t.size() == 1 && (
@@ -3174,7 +3183,11 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 					{
 						auto const* var = dynamic_cast<Identifier const*>(&_memberAccess.expression());
 						std::string varName = var ? var->name() : "...";
-						errorMsg += " Use \"address(" + varName + ")." + memberName + "\" to access this address member.";
+						errorMsg += fmt::format(
+							R"( Use "address({}).{}" to access this address member.)",
+							varName,
+							memberName
+						);
 						return { 3125_error, errorMsg };
 					}
 			}
@@ -3188,7 +3201,13 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 						"Expected address not-payable as members were not found"
 					);
 
-					return { 9862_error, "\"send\" and \"transfer\" are only available for objects of type \"address payable\", not \"" + owningObjectType->humanReadableName() + "\"." };
+					return {
+						9862_error,
+						fmt::format(
+							R"("send" and "transfer" are only available for objects of type "address payable", not "{}".)",
+							owningObjectType->humanReadableName()
+						)
+					};
 				}
 			}
 
@@ -3205,9 +3224,12 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 		m_errorReporter.fatalTypeError(
 			6675_error,
 			_memberAccess.location(),
-			"Member \"" + memberName + "\" not unique "
-			"after argument-dependent lookup in " + owningObjectType->humanReadableName() +
-			(memberName == "value" ? " - did you forget the \"payable\" modifier?" : ".")
+			fmt::format(
+				R"(Member "{}" not unique after argument-dependent lookup in {}{})",
+				memberName,
+				owningObjectType->humanReadableName(),
+				memberName == "value" ? R"( - did you forget the "payable" modifier?)" : "."
+			)
 		);
 
 	_memberAccess.annotation().referencedDeclaration = possibleMembers.front().declaration;
@@ -3219,8 +3241,12 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 	{
 		solAssert(
 			!funType->hasBoundFirstArgument() || owningObjectType->isImplicitlyConvertibleTo(*funType->selfType()),
-			"Function \"" + memberName + "\" cannot be called on an object of type " +
-			owningObjectType->humanReadableName() + " (expected " + funType->selfType()->humanReadableName() + ")."
+			fmt::format(
+				R"(Function "{}" cannot be called on an object of type {} (expected {}).)",
+				memberName,
+				owningObjectType->humanReadableName(),
+				funType->selfType()->humanReadableName()
+			)
 		);
 
 		if (
@@ -3231,7 +3257,11 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 			m_errorReporter.typeError(
 				1621_error,
 				_memberAccess.location(),
-				"Using \"." + memberName + "(...)\" is deprecated. Use \"{" + memberName + ": ...}\" instead."
+				fmt::format(
+					R"abc(Using ".{}(...)" is deprecated. Use "{{{}: ...}}" instead.)abc",
+					memberName,
+					memberName
+				)
 			);
 
 		if (
@@ -3378,7 +3408,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 				m_errorReporter.typeError(
 					9274_error,
 					_memberAccess.location(),
-					"\"runtimeCode\" is not available for contracts containing immutable variables."
+					R"("runtimeCode" is not available for contracts containing immutable variables.)"
 				);
 		}
 		else if (magicType->kind() == MagicType::Kind::MetaType && memberName == "name")
@@ -3396,31 +3426,31 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 				m_errorReporter.typeError(
 					3081_error,
 					_memberAccess.location(),
-					"\"chainid\" is not supported by the VM version."
+					R"("chainid" is not supported by the VM version.)"
 				);
 			else if (memberName == "basefee" && !m_evmVersion.hasBaseFee())
 				m_errorReporter.typeError(
 					5921_error,
 					_memberAccess.location(),
-					"\"basefee\" is not supported by the VM version."
+					R"("basefee" is not supported by the VM version.)"
 				);
 			else if (memberName == "blobbasefee" && !m_evmVersion.hasBlobBaseFee())
 				m_errorReporter.typeError(
 					1006_error,
 					_memberAccess.location(),
-					"\"blobbasefee\" is not supported by the VM version."
+					R"("blobbasefee" is not supported by the VM version.)"
 				);
 			else if (memberName == "prevrandao" && !m_evmVersion.hasPrevRandao())
 				m_errorReporter.warning(
 					9432_error,
 					_memberAccess.location(),
-					"\"prevrandao\" is not supported by the VM version and will be treated as \"difficulty\"."
+					R"("prevrandao" is not supported by the VM version and will be treated as "difficulty".)"
 				);
 			else if (memberName == "difficulty" && m_evmVersion.hasPrevRandao())
 				m_errorReporter.warning(
 					8417_error,
 					_memberAccess.location(),
-					"Since the VM version paris, \"difficulty\" was replaced by \"prevrandao\", which now returns a random number based on the beacon chain."
+					R"(Since the VM version paris, "difficulty" was replaced by "prevrandao", which now returns a random number based on the beacon chain.)"
 				);
 		}
 	}
@@ -3433,7 +3463,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 		m_errorReporter.typeError(
 			7598_error,
 			_memberAccess.location(),
-			"\"codehash\" is not supported by the VM version."
+			R"("codehash" is not supported by the VM version.)"
 		);
 
 	if (!_memberAccess.annotation().isPure.set())
