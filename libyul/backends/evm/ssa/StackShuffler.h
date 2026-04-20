@@ -412,10 +412,10 @@ private:
 		if (_stack.size() < _state.target().tailSize)
 			return {ShuffleHelperResult::Status::NoAction};
 
+		StackOffset const stackTop{_stack.size() - 1};
 		// if we have at least one slot in the args section, try to fix something there
 		if (_stack.size() > _state.target().tailSize)
 		{
-			StackOffset const stackTop{_stack.size() - 1};
 			// if the stack top isn't where it likes to be right now, try to put it somewhere more sensible
 			if (!_state.isArgsCompatible(stackTop, stackTop))
 			{
@@ -484,7 +484,7 @@ private:
 					)
 				)
 				{
-					// for each `targetOffset` in target args, see if we can't swap the out of position `offset` to `targetOffset`
+					// for each `targetOffset` in stack args range, see if we can't swap the out of position `offset` to `targetOffset`
 					for (StackOffset targetOffset: _state.stackArgsRange())
 						if (
 							targetOffset != offset &&  // we shouldn't be looking at the very same offset
@@ -494,12 +494,42 @@ private:
 						)
 						{
 							if (offset != stackTop)
+							{
 								// swap up slot at offset
-									_stack.swap(offset);
+								_stack.swap(offset);
+							}
 							// bring slot at offset into fixed position
 							_stack.swap(targetOffset);
 							return {ShuffleHelperResult::Status::StackModified};
 						}
+				}
+
+				if (!_state.targetArbitrary(offset) && _stack.isValidSwapTarget(offset))
+				{
+					// for each `argOffset` in the stack args range, see if we can swap something into `offset`; reverse to prioritize shallow slots
+					for (StackOffset argOffset: _state.stackArgsRange() | ranges::views::reverse)
+					{
+						if (
+							!_state.isSourceCompatible(offset, argOffset) &&  // we're not looking at the same thing
+							!_stack.isBeyondSwapRange(argOffset) &&  // the target offset should not be beyond reach
+							_state.isArgsCompatible(argOffset, offset) && // we can put argOffset -> offset
+							_state.countReachable(_stack[argOffset]) > 1 &&  // we still have another reachable copy so a subsequent dup is recoverable
+							(  // we only get a strict improvement if
+								!_state.isArgsCompatible(argOffset, argOffset) ||  // either the argOffset isn't in position anyway
+								_stack.offsetToDepth(offset).value == ReachableStackDepth  // or offset is at the swap edge
+							)
+						)
+						{
+							if (argOffset != stackTop)
+							{
+								// swap up slot at offset
+								_stack.swap(argOffset);
+							}
+							// bring slot at offset into fixed position
+							_stack.swap(offset);
+							return {ShuffleHelperResult::Status::StackModified};
+						}
+					}
 				}
 			}
 		}
@@ -754,49 +784,49 @@ private:
 					}
 			}
 		}
-		// pop junk (but not if JUNK is exactly what's needed at that position)
-		for (StackOffset offset: _state.stackSwapReachableRange())
-			if (_stack[offset].isJunk() && !_state.isArgsCompatible(offset, offset))
+
+		{
+			auto const shrinkPriority = [&](StackOffset const _offset) -> std::uint32_t
 			{
-				if (offset != stackTop && _stack[offset] != _stack[stackTop])
-					_stack.swap(offset);
+				auto const& slot = _stack[_offset];
+				bool const notInPosition = !_state.isArgsCompatible(_offset, _offset);
+				bool const isJunk = slot.isJunk();
+				bool const hasSurplus = _state.count(slot) > _state.targetMinCount(slot);
+				bool const hasReachableDuplicate = _state.countReachable(slot) > 1;
+				bool const canBeFreelyGenerated = _stack.canBeFreelyGenerated(slot);
+				bool const isLit = slot.isLiteralValueID();
+
+				if (isJunk && notInPosition)
+					return 5;
+				if (canBeFreelyGenerated && !isLit && notInPosition)
+					return 4;
+				if (hasSurplus)
+					return 3;
+				if (canBeFreelyGenerated)
+					return 2;
+				if (hasReachableDuplicate)
+					return 1;
+				return 0;
+			};
+			std::optional<StackOffset> slotToPop{std::nullopt};
+			std::uint32_t bestScore = 0;
+			for (StackOffset offset: _state.stackSwapReachableRange())
+				if (std::uint32_t const score = shrinkPriority(offset); score > bestScore)
+				{
+					bestScore = score;
+					slotToPop = offset;
+				}
+
+			if (slotToPop)
+			{
+				if (*slotToPop != stackTop && _stack[*slotToPop] != _stack[stackTop])
+					_stack.swap(*slotToPop);
 				_stack.pop();
 				return true;
 			}
 
-		// pop something that can be freely generated except for literals
-		// (but not if it's already in a compatible position)
-		for (StackOffset offset: _state.stackSwapReachableRange())
-			if (
-				_stack.canBeFreelyGenerated(_stack[offset]) &&
-				!_stack[offset].isLiteralValueID() &&
-				!_state.isArgsCompatible(offset, offset)
-			)
-			{
-				if (offset != stackTop && _stack[offset] != _stack[stackTop])
-					_stack.swap(offset);
-				_stack.pop();
-				return true;
-			}
+		}
 
-		// pop anything that isn't in position and we have more than one of
-		for (StackOffset offset: _state.stackSwapReachableRange())
-			if (_state.count(_stack[offset]) > _state.targetMinCount(_stack[offset]))
-			{
-				if (offset != stackTop && _stack[offset] != _stack[stackTop])
-					_stack.swap(offset);
-				_stack.pop();
-				return true;
-			}
-		// pop anything that can be freely generated
-		for (StackOffset offset: _state.stackSwapReachableRange())
-			if (_stack.canBeFreelyGenerated(_stack[offset]))
-			{
-				if (offset != stackTop && _stack[offset] != _stack[stackTop])
-					_stack.swap(offset);
-				_stack.pop();
-				return true;
-			}
 		return false;
 	}
 
@@ -813,6 +843,10 @@ private:
 			// if the target arg is junk, we can simply push0 and it's fine
 			if (targetArg.isJunk())
 				continue;
+
+			// the target offset itself is out of swap range, we must shrink to reach it
+			if (offset.value < _stack.size() && _stack.isBeyondSwapRange(offset))
+				return offset;
 
 			// find first occurrence of the slot
 			std::optional<StackDepth> const depth = _stack.findSlotDepth(targetArg);
