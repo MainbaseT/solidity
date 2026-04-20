@@ -3101,8 +3101,8 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 	// Retrieve the types of the arguments if this is used to call a function.
 	auto const& arguments = _memberAccess.annotation().arguments;
 	MemberList::MemberMap possibleMembers = owningObjectType->members(currentDefinitionScope()).membersByName(memberName);
-	size_t const initialMemberCount = possibleMembers.size();
-	if (initialMemberCount > 1 && arguments)
+	size_t const possibleMemberCountBeforeOverloading = possibleMembers.size();
+	if (possibleMemberCountBeforeOverloading > 1 && arguments)
 	{
 		// do overload resolution
 		for (auto it = possibleMembers.begin(); it != possibleMembers.end();)
@@ -3119,7 +3119,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 
 	if (possibleMembers.empty())
 	{
-		if (initialMemberCount == 0 && !dynamic_cast<ArraySliceType const*>(owningObjectType))
+		if (possibleMemberCountBeforeOverloading == 0 && !dynamic_cast<ArraySliceType const*>(owningObjectType))
 		{
 			// Try to see if the member was removed because it is only available for storage types.
 			auto storageType = TypeProvider::withLocationIfReference(
