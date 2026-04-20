@@ -3088,9 +3088,8 @@ void TypeChecker::endVisit(NewExpression const& _newExpression)
 	}
 }
 
-bool TypeChecker::visit(MemberAccess const& _memberAccess)
+MemberList::Member TypeChecker::resolveOverloads(MemberAccess const& _memberAccess) const
 {
-	_memberAccess.expression().accept(*this);
 	Type const* owningObjectType = type(_memberAccess.expression());
 	ASTString const& memberName = _memberAccess.memberName();
 
@@ -3098,10 +3097,11 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 	auto const& arguments = _memberAccess.annotation().arguments;
 	MemberList::MemberMap possibleMembers = owningObjectType->members(currentDefinitionScope()).membersByName(memberName);
 	size_t const possibleMemberCountBeforeOverloading = possibleMembers.size();
-	if (possibleMemberCountBeforeOverloading > 1 && arguments)
+	if (possibleMemberCountBeforeOverloading >= 2 && arguments)
 	{
 		// do overload resolution
 		for (auto it = possibleMembers.begin(); it != possibleMembers.end();)
+		{
 			if (
 				it->type->category() == Type::Category::Function &&
 				!dynamic_cast<FunctionType const&>(*it->type).canTakeArguments(*arguments, owningObjectType)
@@ -3109,114 +3109,15 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 				it = possibleMembers.erase(it);
 			else
 				++it;
+		}
 	}
-
-	_memberAccess.annotation().isConstant = false;
 
 	if (possibleMembers.empty())
 	{
-		if (possibleMemberCountBeforeOverloading == 0 && !dynamic_cast<ArraySliceType const*>(owningObjectType))
-		{
-			// Try to see if the member was removed because it is only available for storage types.
-			auto storageType = TypeProvider::withLocationIfReference(
-				DataLocation::Storage,
-				owningObjectType
-			);
-			if (!storageType->members(currentDefinitionScope()).membersByName(memberName).empty())
-				m_errorReporter.fatalTypeError(
-					4994_error,
-					_memberAccess.location(),
-
-					fmt::format(
-						R"(Member "{}" is not available in {} outside of storage.)",
-						memberName,
-						owningObjectType->humanReadableName()
-					)
-				);
-		}
-
-		auto [errorId, description] = [&]() -> std::tuple<ErrorId, std::string> {
-			std::string errorMsg = fmt::format(
-				R"(Member "{}" not found or not visible after argument-dependent lookup in {}.)",
-				memberName,
-				owningObjectType->humanReadableName()
-			);
-
-			if (auto const* funType = dynamic_cast<FunctionType const*>(owningObjectType))
-			{
-				TypePointers const& t = funType->returnParameterTypes();
-
-				if (memberName == "value")
-				{
-					if (funType->kind() == FunctionType::Kind::Creation)
-						return {
-							8827_error,
-							fmt::format(
-								R"(Constructor for {} must be payable for member "value" to be available.)",
-								t.front()->humanReadableName()
-							)
-						};
-					else if (
-						funType->kind() == FunctionType::Kind::DelegateCall ||
-						funType->kind() == FunctionType::Kind::BareDelegateCall
-					)
-						return {8477_error, R"(Member "value" is not allowed in delegated calls due to "msg.value" persisting.)"};
-					else
-						return {8820_error, R"(Member "value" is only available for payable functions.)"};
-				}
-				else if (
-					t.size() == 1 && (
-						t.front()->category() == Type::Category::Struct ||
-						t.front()->category() == Type::Category::Contract
-					)
-				)
-					return { 6005_error, errorMsg + " Did you intend to call the function?" };
-			}
-			else if (owningObjectType->category() == Type::Category::Contract)
-			{
-				for (MemberList::Member const& addressMember: TypeProvider::payableAddress()->nativeMembers(nullptr))
-					if (addressMember.name == memberName)
-					{
-						auto const* var = dynamic_cast<Identifier const*>(&_memberAccess.expression());
-						std::string varName = var ? var->name() : "...";
-						errorMsg += fmt::format(
-							R"( Use "address({}).{}" to access this address member.)",
-							varName,
-							memberName
-						);
-						return { 3125_error, errorMsg };
-					}
-			}
-			else if (auto const* addressType = dynamic_cast<AddressType const*>(owningObjectType))
-			{
-				// Trigger error when using send or transfer with a non-payable fallback function.
-				if (memberName == "send" || memberName == "transfer")
-				{
-					solAssert(
-						addressType->stateMutability() != StateMutability::Payable,
-						"Expected address not-payable as members were not found"
-					);
-
-					return {
-						9862_error,
-						fmt::format(
-							R"("send" and "transfer" are only available for objects of type "address payable", not "{}".)",
-							owningObjectType->humanReadableName()
-						)
-					};
-				}
-			}
-
-			return { 9582_error, errorMsg };
-		}();
-
-		m_errorReporter.fatalTypeError(
-			errorId,
-			_memberAccess.location(),
-			description
-		);
+		auto [errorID, errorMsg] = diagnoseUnresolvedMemberAccess(_memberAccess, possibleMemberCountBeforeOverloading);
+		m_errorReporter.fatalTypeError(errorID, _memberAccess.location(), errorMsg);
 	}
-	else if (possibleMembers.size() > 1)
+	else if (possibleMembers.size() >= 2)
 		m_errorReporter.fatalTypeError(
 			6675_error,
 			_memberAccess.location(),
@@ -3228,9 +3129,127 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 			)
 		);
 
-	_memberAccess.annotation().referencedDeclaration = possibleMembers.front().declaration;
-	_memberAccess.annotation().type = possibleMembers.front().type;
+	return possibleMembers.front();
+}
 
+std::pair<ErrorId, std::string> TypeChecker::diagnoseUnresolvedMemberAccess(
+	MemberAccess const& _memberAccess,
+	size_t const _possibleMemberCountBeforeOverloading
+) const
+{
+	Type const* owningObjectType = type(_memberAccess.expression());
+	ASTString const& memberName = _memberAccess.memberName();
+
+	if (_possibleMemberCountBeforeOverloading == 0 && !dynamic_cast<ArraySliceType const*>(owningObjectType))
+	{
+		// Try to see if the member was removed because it is only available for storage types.
+		auto storageType = TypeProvider::withLocationIfReference(
+			DataLocation::Storage,
+			owningObjectType
+		);
+		if (!storageType->members(currentDefinitionScope()).membersByName(memberName).empty())
+			return {
+				4994_error,
+				fmt::format(
+					R"(Member "{}" is not available in {} outside of storage.)",
+					memberName,
+					owningObjectType->humanReadableName()
+				)
+			};
+	}
+
+	std::string errorMsg = fmt::format(
+		R"(Member "{}" not found or not visible after argument-dependent lookup in {}.)",
+		memberName,
+		owningObjectType->humanReadableName()
+	);
+
+	if (auto const* funType = dynamic_cast<FunctionType const*>(owningObjectType))
+	{
+		TypePointers const& t = funType->returnParameterTypes();
+
+		if (memberName == "value")
+		{
+			if (funType->kind() == FunctionType::Kind::Creation)
+				return {
+					8827_error,
+					fmt::format(
+						R"(Constructor for {} must be payable for member "value" to be available.)",
+						t.front()->humanReadableName()
+					)
+				};
+			else if (
+				funType->kind() == FunctionType::Kind::DelegateCall ||
+				funType->kind() == FunctionType::Kind::BareDelegateCall
+			)
+				return {
+					8477_error,
+					R"(Member "value" is not allowed in delegated calls due to "msg.value" persisting.)"
+				};
+			else
+				return {8820_error, R"(Member "value" is only available for payable functions.)"};
+		}
+		else if (
+			t.size() == 1 && (
+				t.front()->category() == Type::Category::Struct ||
+				t.front()->category() == Type::Category::Contract
+			)
+		)
+			return {6005_error, errorMsg + " Did you intend to call the function?"};
+	}
+	else if (owningObjectType->category() == Type::Category::Contract)
+	{
+		for (MemberList::Member const& addressMember: TypeProvider::payableAddress()->nativeMembers(nullptr))
+			if (addressMember.name == memberName)
+			{
+				auto const* var = dynamic_cast<Identifier const*>(&_memberAccess.expression());
+				std::string varName = var ? var->name() : "...";
+				errorMsg += fmt::format(
+					R"( Use "address({}).{}" to access this address member.)",
+					varName,
+					memberName
+				);
+				return {3125_error, errorMsg};
+			}
+	}
+	else if (auto const* addressType = dynamic_cast<AddressType const*>(owningObjectType))
+	{
+		// Trigger error when using `send` or `transfer` with a non-payable fallback function.
+		if (memberName == "send" || memberName == "transfer")
+		{
+			solAssert(
+				addressType->stateMutability() != StateMutability::Payable,
+				"Expected address not-payable as members were not found"
+			);
+
+			return {
+				9862_error,
+				fmt::format(
+					R"("send" and "transfer" are only available for objects of type "address payable", not "{}".)",
+					owningObjectType->humanReadableName()
+				)
+			};
+		}
+	}
+
+	// If no detailed error were reported, issues a general unresolved member error.
+	return {9582_error, errorMsg};
+}
+
+bool TypeChecker::visit(MemberAccess const& _memberAccess)
+{
+	_memberAccess.expression().accept(*this);
+	Type const* owningObjectType = type(_memberAccess.expression());
+	ASTString const& memberName = _memberAccess.memberName();
+
+	// TODO: This should be probably deprecated.
+	_memberAccess.annotation().isConstant = false;
+	MemberList::Member const possibleMember = resolveOverloads(_memberAccess);
+
+	_memberAccess.annotation().referencedDeclaration = possibleMember.declaration;
+	_memberAccess.annotation().type = possibleMember.type;
+
+	// Lookup type required to find the function declaration.
 	VirtualLookup requiredLookup = VirtualLookup::Static;
 
 	if (auto funType = dynamic_cast<FunctionType const*>(_memberAccess.annotation().type))
@@ -3262,7 +3281,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 
 		if (
 			funType->kind() == FunctionType::Kind::ArrayPush &&
-			arguments.value().numArguments() != 0 &&
+			_memberAccess.annotation().arguments.value().numArguments() != 0 &&
 			owningObjectType->containsNestedMapping()
 		)
 			m_errorReporter.typeError(
