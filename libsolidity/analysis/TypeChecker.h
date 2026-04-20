@@ -208,6 +208,12 @@ private:
 		size_t _possibleMemberCountBeforeOverloading
 	) const;
 
+	/// Validates access to a member function of a given type, ensuring that the invocation
+	/// is consistent with the expected types and semantics. Reports errors and warnings
+	/// for invalid access, use of deprecated features, and unsupported operations.
+	/// @param _memberAccess Member access expression.
+	void checkAccessedMemberFunction(MemberAccess const& _memberAccess) const;
+
 	SourceUnit const* m_currentSourceUnit = nullptr;
 	ContractDefinition const* m_currentContract = nullptr;
 

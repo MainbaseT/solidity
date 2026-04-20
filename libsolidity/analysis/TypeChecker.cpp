@@ -3236,6 +3236,67 @@ std::pair<ErrorId, std::string> TypeChecker::diagnoseUnresolvedMemberAccess(
 	return {9582_error, errorMsg};
 }
 
+void TypeChecker::checkAccessedMemberFunction(MemberAccess const& _memberAccess) const
+{
+	auto const* accessedMemberFunctionType = dynamic_cast<FunctionType const*>(type(_memberAccess));
+	solAssert(accessedMemberFunctionType, "Expected function type.");
+
+	Type const* owningObjectType = type(_memberAccess.expression());
+	solAssert(owningObjectType);
+
+	auto const& memberName = _memberAccess.memberName();
+
+	solAssert(
+		!accessedMemberFunctionType->hasBoundFirstArgument() ||
+		owningObjectType->isImplicitlyConvertibleTo(*accessedMemberFunctionType->selfType()),
+		fmt::format(
+			R"(Function "{}" cannot be called on an object of type {} (expected {}).)",
+			memberName,
+			owningObjectType->humanReadableName(),
+			accessedMemberFunctionType->selfType()->humanReadableName()
+		)
+	);
+
+	if (
+		dynamic_cast<FunctionType const*>(owningObjectType) &&
+		_memberAccess.annotation().referencedDeclaration == nullptr && // It's not defined
+		(memberName == "value" || memberName == "gas")
+	)
+		m_errorReporter.typeError(
+			1621_error,
+			_memberAccess.location(),
+			fmt::format(
+				R"abc(Using ".{}(...)" is deprecated. Use "{{{}: ...}}" instead.)abc",
+				memberName,
+				memberName
+			)
+		);
+
+	if (
+		accessedMemberFunctionType->kind() == FunctionType::Kind::ArrayPush &&
+		_memberAccess.annotation().arguments.value().numArguments() > 0 &&
+		owningObjectType->containsNestedMapping()
+	)
+		m_errorReporter.typeError(
+			8871_error,
+			_memberAccess.location(),
+			"Storage arrays with nested mappings do not support .push(<arg>)."
+		);
+
+	if (
+		accessedMemberFunctionType->kind() == FunctionType::Kind::Send ||
+		accessedMemberFunctionType->kind() == FunctionType::Kind::Transfer
+	)
+		m_errorReporter.warning(
+			9207_error,
+			_memberAccess.location(),
+			fmt::format(
+				R"('{}' is deprecated and scheduled for removal. Use 'call{{value: <amount>}}("")' instead.)",
+				accessedMemberFunctionType->kind() == FunctionType::Kind::Send ? "send" : "transfer"
+			)
+		);
+}
+
 bool TypeChecker::visit(MemberAccess const& _memberAccess)
 {
 	_memberAccess.expression().accept(*this);
@@ -3252,64 +3313,18 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 	// Lookup type required to find the function declaration.
 	VirtualLookup requiredLookup = VirtualLookup::Static;
 
-	if (auto funType = dynamic_cast<FunctionType const*>(_memberAccess.annotation().type))
+	if (auto const* accessedMemberFunctionType = dynamic_cast<FunctionType const*>(type(_memberAccess)))
 	{
-		solAssert(
-			!funType->hasBoundFirstArgument() || owningObjectType->isImplicitlyConvertibleTo(*funType->selfType()),
-			fmt::format(
-				R"(Function "{}" cannot be called on an object of type {} (expected {}).)",
-				memberName,
-				owningObjectType->humanReadableName(),
-				funType->selfType()->humanReadableName()
-			)
-		);
-
-		if (
-			dynamic_cast<FunctionType const*>(owningObjectType) &&
-			!_memberAccess.annotation().referencedDeclaration &&
-			(memberName == "value" || memberName == "gas")
-		)
-			m_errorReporter.typeError(
-				1621_error,
-				_memberAccess.location(),
-				fmt::format(
-					R"abc(Using ".{}(...)" is deprecated. Use "{{{}: ...}}" instead.)abc",
-					memberName,
-					memberName
-				)
-			);
-
-		if (
-			funType->kind() == FunctionType::Kind::ArrayPush &&
-			_memberAccess.annotation().arguments.value().numArguments() != 0 &&
-			owningObjectType->containsNestedMapping()
-		)
-			m_errorReporter.typeError(
-				8871_error,
-				_memberAccess.location(),
-				"Storage arrays with nested mappings do not support .push(<arg>)."
-			);
-
-		if (!funType->hasBoundFirstArgument())
-			if (auto typeType = dynamic_cast<TypeType const*>(owningObjectType))
+		// Update required lookup
+		if (!accessedMemberFunctionType->hasBoundFirstArgument())
+			if (auto const* owningObjectTypeType = dynamic_cast<TypeType const*>(owningObjectType))
 			{
-				auto contractType = dynamic_cast<ContractType const*>(typeType->actualType());
-				if (contractType && contractType->isSuper())
+				auto const* owningObjectContractType = dynamic_cast<ContractType const*>(owningObjectTypeType->actualType());
+				if (owningObjectContractType && owningObjectContractType->isSuper())
 					requiredLookup = VirtualLookup::Super;
 			}
 
-		if (
-			funType->kind() == FunctionType::Kind::Send ||
-			funType->kind() == FunctionType::Kind::Transfer
-		)
-			m_errorReporter.warning(
-				9207_error,
-				_memberAccess.location(),
-				fmt::format(
-					"'{}' is deprecated and scheduled for removal. Use 'call{{value: <amount>}}(\"\")' instead.",
-					funType->kind() == FunctionType::Kind::Send ? "send" : "transfer"
-				)
-			);
+		checkAccessedMemberFunction(_memberAccess);
 	}
 
 	_memberAccess.annotation().requiredLookup = requiredLookup;
