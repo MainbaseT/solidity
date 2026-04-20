@@ -23,6 +23,7 @@
 
 #include <boost/container/flat_map.hpp>
 
+#include <range/v3/algorithm/contains.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/transform.hpp>
@@ -164,9 +165,9 @@ public:
 			// check that all required values are on stack
 			detail::State const state(_stack.data(), target, ReachableStackDepth);
 			for (auto const& liveVariable: _liveOut | ranges::views::keys | ranges::views::transform(Slot::makeValueID))
-				yulAssert(_stack.canBeFreelyGenerated(liveVariable) || ranges::find(_stack.data(), liveVariable) != ranges::end(_stack.data()));
+				yulAssert(!_stack.canBeFreelyGenerated(liveVariable) && ranges::contains(_stack.data(), liveVariable));
 			for (auto const& arg: _args)
-				yulAssert(_stack.canBeFreelyGenerated(arg) || ranges::find(_stack.data(), arg) != ranges::end(_stack.data()));
+				yulAssert(_stack.canBeFreelyGenerated(arg) || ranges::contains(_stack.data(), arg));
 		}
 
 		static std::size_t constexpr maxIterations = 1000;
