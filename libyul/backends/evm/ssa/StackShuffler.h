@@ -412,10 +412,10 @@ private:
 		if (_stack.size() < _state.target().tailSize)
 			return {ShuffleHelperResult::Status::NoAction};
 
+		StackOffset const stackTop{_stack.size() - 1};
 		// if we have at least one slot in the args section, try to fix something there
 		if (_stack.size() > _state.target().tailSize)
 		{
-			StackOffset const stackTop{_stack.size() - 1};
 			// if the stack top isn't where it likes to be right now, try to put it somewhere more sensible
 			if (!_state.isArgsCompatible(stackTop, stackTop))
 			{
@@ -484,7 +484,7 @@ private:
 					)
 				)
 				{
-					// for each `targetOffset` in target args, see if we can't swap the out of position `offset` to `targetOffset`
+					// for each `targetOffset` in stack args range, see if we can't swap the out of position `offset` to `targetOffset`
 					for (StackOffset targetOffset: _state.stackArgsRange())
 						if (
 							targetOffset != offset &&  // we shouldn't be looking at the very same offset
@@ -494,12 +494,42 @@ private:
 						)
 						{
 							if (offset != stackTop)
+							{
 								// swap up slot at offset
-									_stack.swap(offset);
+								_stack.swap(offset);
+							}
 							// bring slot at offset into fixed position
 							_stack.swap(targetOffset);
 							return {ShuffleHelperResult::Status::StackModified};
 						}
+				}
+
+				if (!_state.targetArbitrary(offset) && _stack.isValidSwapTarget(offset))
+				{
+					// for each `argOffset` in the stack args range, see if we can swap something into `offset`; reverse to prioritize shallow slots
+					for (StackOffset argOffset: _state.stackArgsRange() | ranges::views::reverse)
+					{
+						if (
+							!_state.isSourceCompatible(offset, argOffset) &&  // we're not looking at the same thing
+							!_stack.isBeyondSwapRange(argOffset) &&  // the target offset should not be beyond reach
+							_state.isArgsCompatible(argOffset, offset) && // we can put argOffset -> offset
+							_state.countReachable(_stack[argOffset]) > 1 &&  // we still have another reachable copy so a subsequent dup is recoverable
+							(  // we only get a strict improvement if
+								!_state.isArgsCompatible(argOffset, argOffset) ||  // either the argOffset isn't in position anyway
+								_stack.offsetToDepth(offset).value == ReachableStackDepth  // or offset is at the swap edge
+							)
+						)
+						{
+							if (argOffset != stackTop)
+							{
+								// swap up slot at offset
+								_stack.swap(argOffset);
+							}
+							// bring slot at offset into fixed position
+							_stack.swap(offset);
+							return {ShuffleHelperResult::Status::StackModified};
+						}
+					}
 				}
 			}
 		}

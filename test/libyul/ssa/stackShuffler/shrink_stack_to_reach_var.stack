@@ -8,33 +8,11 @@ targetStackSize: 20
 //          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
 //          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
 //          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//         DUP1|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          POP|     v1     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0
-//          ...|
+//       SWAP16|     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v1
+//         DUP2|     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v1     v0
+//         DUP1|     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v1     v0     v0
+//         DUP1|     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v1     v0     v0     v0
+//        SWAP3|     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v1
 //             +--------------------------------------------------------------------------------------------------------------------------------------------
 //     (target)|     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v0     v1
-// Status: MaxIterationsReached
+// Status: Admissible
