@@ -844,6 +844,10 @@ private:
 			if (targetArg.isJunk())
 				continue;
 
+			// the target offset itself is out of swap range, we must shrink to reach it
+			if (offset.value < _stack.size() && _stack.isBeyondSwapRange(offset))
+				return offset;
+
 			// find first occurrence of the slot
 			std::optional<StackDepth> const depth = _stack.findSlotDepth(targetArg);
 			if (!depth)
