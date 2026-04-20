@@ -36,10 +36,6 @@
 #include <libsolutil/Algorithms.h>
 #include <libsolutil/StringUtils.h>
 #include <libsolutil/Views.h>
-#include <libsolutil/Visitor.h>
-
-#include <boost/algorithm/string/join.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 
 #include <fmt/format.h>
 
