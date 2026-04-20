@@ -3098,10 +3098,8 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 	Type const* exprType = type(_memberAccess.expression());
 	ASTString const& memberName = _memberAccess.memberName();
 
-	auto& annotation = _memberAccess.annotation();
-
 	// Retrieve the types of the arguments if this is used to call a function.
-	auto const& arguments = annotation.arguments;
+	auto const& arguments = _memberAccess.annotation().arguments;
 	MemberList::MemberMap possibleMembers = exprType->members(currentDefinitionScope()).membersByName(memberName);
 	size_t const initialMemberCount = possibleMembers.size();
 	if (initialMemberCount > 1 && arguments)
@@ -3117,7 +3115,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 				++it;
 	}
 
-	annotation.isConstant = false;
+	_memberAccess.annotation().isConstant = false;
 
 	if (possibleMembers.empty())
 	{
@@ -3212,12 +3210,12 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 			(memberName == "value" ? " - did you forget the \"payable\" modifier?" : ".")
 		);
 
-	annotation.referencedDeclaration = possibleMembers.front().declaration;
-	annotation.type = possibleMembers.front().type;
+	_memberAccess.annotation().referencedDeclaration = possibleMembers.front().declaration;
+	_memberAccess.annotation().type = possibleMembers.front().type;
 
 	VirtualLookup requiredLookup = VirtualLookup::Static;
 
-	if (auto funType = dynamic_cast<FunctionType const*>(annotation.type))
+	if (auto funType = dynamic_cast<FunctionType const*>(_memberAccess.annotation().type))
 	{
 		solAssert(
 			!funType->hasBoundFirstArgument() || exprType->isImplicitlyConvertibleTo(*funType->selfType()),
@@ -3227,7 +3225,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 
 		if (
 			dynamic_cast<FunctionType const*>(exprType) &&
-			!annotation.referencedDeclaration &&
+			!_memberAccess.annotation().referencedDeclaration &&
 			(memberName == "value" || memberName == "gas")
 		)
 			m_errorReporter.typeError(
@@ -3269,36 +3267,36 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 			);
 	}
 
-	annotation.requiredLookup = requiredLookup;
+	_memberAccess.annotation().requiredLookup = requiredLookup;
 
 	if (auto const* structType = dynamic_cast<StructType const*>(exprType))
-		annotation.isLValue = !structType->dataStoredIn(DataLocation::CallData);
+		_memberAccess.annotation().isLValue = !structType->dataStoredIn(DataLocation::CallData);
 	else if (exprType->category() == Type::Category::Array)
-		annotation.isLValue = false;
+		_memberAccess.annotation().isLValue = false;
 	else if (exprType->category() == Type::Category::FixedBytes)
-		annotation.isLValue = false;
+		_memberAccess.annotation().isLValue = false;
 	else if (TypeType const* typeType = dynamic_cast<decltype(typeType)>(exprType))
 	{
 		if (ContractType const* contractType = dynamic_cast<decltype(contractType)>(typeType->actualType()))
 		{
-			annotation.isLValue = annotation.referencedDeclaration->isLValue();
+			_memberAccess.annotation().isLValue = _memberAccess.annotation().referencedDeclaration->isLValue();
 			if (
-				auto const* functionType = dynamic_cast<FunctionType const*>(annotation.type);
+				auto const* functionType = dynamic_cast<FunctionType const*>(_memberAccess.annotation().type);
 				functionType &&
 				functionType->kind() == FunctionType::Kind::Declaration
 			)
-				annotation.isPure = *_memberAccess.expression().annotation().isPure;
+				_memberAccess.annotation().isPure = *_memberAccess.expression().annotation().isPure;
 		}
 		else
-			annotation.isLValue = false;
+			_memberAccess.annotation().isLValue = false;
 	}
 	else if (exprType->category() == Type::Category::Module)
 	{
-		annotation.isPure = *_memberAccess.expression().annotation().isPure;
-		annotation.isLValue = false;
+		_memberAccess.annotation().isPure = *_memberAccess.expression().annotation().isPure;
+		_memberAccess.annotation().isLValue = false;
 	}
 	else
-		annotation.isLValue = false;
+		_memberAccess.annotation().isLValue = false;
 
 	// TODO some members might be pure, but for example `address(0x123).balance` is not pure
 	// although every subexpression is, so leaving this limited for now.
@@ -3308,21 +3306,21 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 			tt->actualType()->category() == Type::Category::Enum ||
 			tt->actualType()->category() == Type::Category::UserDefinedValueType
 		)
-			annotation.isPure = true;
+			_memberAccess.annotation().isPure = true;
 
 		// `concat` purity depends also on its arguments, but this is checked later, in visit(FunctionCall...)
 		// This covers `bytes.concat` and `string.concat`.
 		if (tt->actualType()->category() == Type::Category::Array)
 		{
 			if (
-				auto const* funcType = dynamic_cast<FunctionType const*>(annotation.type);
+				auto const* funcType = dynamic_cast<FunctionType const*>(_memberAccess.annotation().type);
 				funcType &&
 				(
 					funcType->kind() == FunctionType::Kind::StringConcat ||
 					funcType->kind() == FunctionType::Kind::BytesConcat
 				)
 			)
-				annotation.isPure = true;
+				_memberAccess.annotation().isPure = true;
 		}
 	}
 	if (
@@ -3342,7 +3340,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 					if (exprInt->name() == "this" || exprInt->name() == "super")
 						isPure = true;
 
-				annotation.isPure = isPure;
+				_memberAccess.annotation().isPure = isPure;
 			}
 		}
 		// In case of event or error definition the selector is always compile-time constant, as it can be
@@ -3351,26 +3349,26 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 			dynamic_cast<EventDefinition const*>(&functionType->declaration()) ||
 			dynamic_cast<ErrorDefinition const*>(&functionType->declaration())
 		)
-			annotation.isPure = true;
+			_memberAccess.annotation().isPure = true;
 	}
 
 	if (
-		auto const* varDecl = dynamic_cast<VariableDeclaration const*>(annotation.referencedDeclaration);
-		!annotation.isPure.set() &&
+		auto const* varDecl = dynamic_cast<VariableDeclaration const*>(_memberAccess.annotation().referencedDeclaration);
+		!_memberAccess.annotation().isPure.set() &&
 		varDecl &&
 		varDecl->isConstant()
 	)
-		annotation.isPure = true;
+		_memberAccess.annotation().isPure = true;
 
 	if (auto magicType = dynamic_cast<MagicType const*>(exprType))
 	{
 		if (magicType->kind() == MagicType::Kind::ABI)
-			annotation.isPure = true;
+			_memberAccess.annotation().isPure = true;
 		else if (magicType->kind() == MagicType::Kind::MetaType && (
 			memberName == "creationCode" || memberName == "runtimeCode"
 		))
 		{
-			annotation.isPure = true;
+			_memberAccess.annotation().isPure = true;
 			ContractType const& accessedContractType = dynamic_cast<ContractType const&>(*magicType->typeArgument());
 			solAssert(!accessedContractType.isSuper(), "");
 			if (
@@ -3384,14 +3382,14 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 				);
 		}
 		else if (magicType->kind() == MagicType::Kind::MetaType && memberName == "name")
-			annotation.isPure = true;
+			_memberAccess.annotation().isPure = true;
 		else if (magicType->kind() == MagicType::Kind::MetaType && memberName == "interfaceId")
-			annotation.isPure = true;
+			_memberAccess.annotation().isPure = true;
 		else if (
 			magicType->kind() == MagicType::Kind::MetaType &&
 			(memberName == "min" || memberName == "max")
 		)
-			annotation.isPure = true;
+			_memberAccess.annotation().isPure = true;
 		else if (magicType->kind() == MagicType::Kind::Block)
 		{
 			if (memberName == "chainid" && !m_evmVersion.hasChainID())
@@ -3438,8 +3436,8 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 			"\"codehash\" is not supported by the VM version."
 		);
 
-	if (!annotation.isPure.set())
-		annotation.isPure = false;
+	if (!_memberAccess.annotation().isPure.set())
+		_memberAccess.annotation().isPure = false;
 
 	return false;
 }
