@@ -754,49 +754,46 @@ private:
 					}
 			}
 		}
-		// pop junk (but not if JUNK is exactly what's needed at that position)
-		for (StackOffset offset: _state.stackSwapReachableRange())
-			if (_stack[offset].isJunk() && !_state.isArgsCompatible(offset, offset))
+
+		{
+			auto const shrinkPriority = [&](StackOffset const _offset) -> std::uint32_t
 			{
-				if (offset != stackTop && _stack[offset] != _stack[stackTop])
-					_stack.swap(offset);
+				auto const& slot = _stack[_offset];
+				bool const notInPosition = !_state.isArgsCompatible(_offset, _offset);
+				bool const isJunk = slot.isJunk();
+				bool const hasSurplus = _state.count(slot) > _state.targetMinCount(slot);
+				bool const canBeFreelyGenerated = _stack.canBeFreelyGenerated(slot);
+				bool const isLit = slot.isLiteralValueID();
+
+				if (isJunk && notInPosition)
+					return 4;
+				if (canBeFreelyGenerated && !isLit && notInPosition)
+					return 3;
+				if (hasSurplus)
+					return 2;
+				if (canBeFreelyGenerated)
+					return 1;
+				return 0;
+			};
+			std::optional<StackOffset> slotToPop{std::nullopt};
+			std::uint32_t bestScore = 0;
+			for (StackOffset offset: _state.stackSwapReachableRange())
+				if (std::uint32_t const score = shrinkPriority(offset); score > bestScore)
+				{
+					bestScore = score;
+					slotToPop = offset;
+				}
+
+			if (slotToPop)
+			{
+				if (*slotToPop != stackTop && _stack[*slotToPop] != _stack[stackTop])
+					_stack.swap(*slotToPop);
 				_stack.pop();
 				return true;
 			}
 
-		// pop something that can be freely generated except for literals
-		// (but not if it's already in a compatible position)
-		for (StackOffset offset: _state.stackSwapReachableRange())
-			if (
-				_stack.canBeFreelyGenerated(_stack[offset]) &&
-				!_stack[offset].isLiteralValueID() &&
-				!_state.isArgsCompatible(offset, offset)
-			)
-			{
-				if (offset != stackTop && _stack[offset] != _stack[stackTop])
-					_stack.swap(offset);
-				_stack.pop();
-				return true;
-			}
+		}
 
-		// pop anything that isn't in position and we have more than one of
-		for (StackOffset offset: _state.stackSwapReachableRange())
-			if (_state.count(_stack[offset]) > _state.targetMinCount(_stack[offset]))
-			{
-				if (offset != stackTop && _stack[offset] != _stack[stackTop])
-					_stack.swap(offset);
-				_stack.pop();
-				return true;
-			}
-		// pop anything that can be freely generated
-		for (StackOffset offset: _state.stackSwapReachableRange())
-			if (_stack.canBeFreelyGenerated(_stack[offset]))
-			{
-				if (offset != stackTop && _stack[offset] != _stack[stackTop])
-					_stack.swap(offset);
-				_stack.pop();
-				return true;
-			}
 		return false;
 	}
 
