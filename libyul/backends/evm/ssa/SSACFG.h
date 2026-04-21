@@ -78,7 +78,6 @@ public:
 		std::reference_wrapper<FunctionCall const> call;
 		bool canContinue;
 	};
-	struct LiteralAssignment {};
 
 	/// Upsilon records a phi pre-image at a block exit.
 	/// Upsilon(value, phi) means: the value flowing into `phi` from this block is `value`.
@@ -91,7 +90,7 @@ public:
 
 	struct Operation {
 		std::vector<ValueId> outputs{};
-		std::variant<BuiltinCall, Call, LiteralAssignment> kind;
+		std::variant<BuiltinCall, Call> kind;
 		std::vector<ValueId> inputs{};
 	};
 	struct BasicBlock

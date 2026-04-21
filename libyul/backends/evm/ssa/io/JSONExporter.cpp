@@ -51,11 +51,6 @@ Json toJson(Json& _ret, SSACFG const& _cfg, SSACFG::Operation const& _operation)
 			_ret["type"] = "FunctionCall";
 			opJson["op"] = _call.function.get().name.str();
 		},
-		[&](SSACFG::LiteralAssignment const&) {
-			yulAssert(_operation.inputs.size() == 1);
-			yulAssert(_operation.inputs.back().isLiteral());
-			opJson["op"] = "LiteralAssignment";
-		},
 		[&](SSACFG::BuiltinCall const& _call) {
 			_ret["type"] = "BuiltinCall";
 			Json builtinArgsJson = Json::array();

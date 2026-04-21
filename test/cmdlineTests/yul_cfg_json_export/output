@@ -1221,24 +1221,13 @@ Yul Control Flow Graph:
                             "type": "ConditionalJump"
                         },
                         "id": "Block18",
-                        "instructions": [
-                            {
-                                "in": [
-                                    "0x00"
-                                ],
-                                "op": "LiteralAssignment",
-                                "out": [
-                                    "v36"
-                                ]
-                            }
-                        ],
+                        "instructions": [],
                         "liveness": {
                             "in": [
                                 "v25",
                                 "v31"
                             ],
                             "out": [
-                                "v36",
                                 "v25"
                             ]
                         }
@@ -1308,8 +1297,8 @@ Yul Control Flow Graph:
                         "instructions": [
                             {
                                 "in": [
-                                    "v36",
-                                    "v52"
+                                    "0x00",
+                                    "v50"
                                 ],
                                 "op": "PhiFunction",
                                 "out": [
@@ -1322,13 +1311,13 @@ Yul Control Flow Graph:
                                 ],
                                 "op": "mload",
                                 "out": [
-                                    "v53"
+                                    "v51"
                                 ]
                             },
                             {
                                 "in": [
                                     "phi26",
-                                    "v53"
+                                    "v51"
                                 ],
                                 "op": "mstore",
                                 "out": []
@@ -1336,7 +1325,7 @@ Yul Control Flow Graph:
                             {
                                 "in": [
                                     "0x20",
-                                    "v53"
+                                    "v51"
                                 ],
                                 "op": "return",
                                 "out": []
@@ -1352,7 +1341,7 @@ Yul Control Flow Graph:
                     },
                     {
                         "exit": {
-                            "cond": "v39",
+                            "cond": "v37",
                             "targets": [
                                 "Block23",
                                 "Block22"
@@ -1362,29 +1351,20 @@ Yul Control Flow Graph:
                         "id": "Block20",
                         "instructions": [
                             {
-                                "in": [
-                                    "0x20"
-                                ],
-                                "op": "LiteralAssignment",
-                                "out": [
-                                    "v37"
-                                ]
-                            },
-                            {
                                 "in": [],
                                 "op": "returndatasize",
                                 "out": [
-                                    "v38"
+                                    "v36"
                                 ]
                             },
                             {
                                 "in": [
-                                    "v38",
+                                    "v36",
                                     "0x20"
                                 ],
                                 "op": "gt",
                                 "out": [
-                                    "v39"
+                                    "v37"
                                 ]
                             }
                         ],
@@ -1393,7 +1373,6 @@ Yul Control Flow Graph:
                                 "v25"
                             ],
                             "out": [
-                                "v37",
                                 "v25"
                             ]
                         },
@@ -1405,7 +1384,7 @@ Yul Control Flow Graph:
                             "Block22"
                         ],
                         "exit": {
-                            "cond": "v47",
+                            "cond": "v45",
                             "targets": [
                                 "Block25",
                                 "Block24"
@@ -1416,8 +1395,8 @@ Yul Control Flow Graph:
                         "instructions": [
                             {
                                 "in": [
-                                    "v37",
-                                    "v40"
+                                    "0x20",
+                                    "v38"
                                 ],
                                 "op": "PhiFunction",
                                 "out": [
@@ -1430,7 +1409,7 @@ Yul Control Flow Graph:
                                 ],
                                 "op": "not",
                                 "out": [
-                                    "v41"
+                                    "v39"
                                 ]
                             },
                             {
@@ -1440,57 +1419,57 @@ Yul Control Flow Graph:
                                 ],
                                 "op": "add",
                                 "out": [
-                                    "v42"
+                                    "v40"
+                                ]
+                            },
+                            {
+                                "in": [
+                                    "v39",
+                                    "v40"
+                                ],
+                                "op": "and",
+                                "out": [
+                                    "v41"
                                 ]
                             },
                             {
                                 "in": [
                                     "v41",
+                                    "v25"
+                                ],
+                                "op": "add",
+                                "out": [
+                                    "v42"
+                                ]
+                            },
+                            {
+                                "in": [
+                                    "v25",
                                     "v42"
                                 ],
-                                "op": "and",
+                                "op": "lt",
                                 "out": [
                                     "v43"
                                 ]
                             },
                             {
                                 "in": [
-                                    "v43",
-                                    "v25"
-                                ],
-                                "op": "add",
-                                "out": [
-                                    "v44"
-                                ]
-                            },
-                            {
-                                "in": [
-                                    "v25",
-                                    "v44"
-                                ],
-                                "op": "lt",
-                                "out": [
-                                    "v45"
-                                ]
-                            },
-                            {
-                                "in": [
                                     "0xffffffffffffffff",
-                                    "v44"
+                                    "v42"
                                 ],
                                 "op": "gt",
                                 "out": [
-                                    "v46"
+                                    "v44"
                                 ]
                             },
                             {
                                 "in": [
-                                    "v45",
-                                    "v46"
+                                    "v43",
+                                    "v44"
                                 ],
                                 "op": "or",
                                 "out": [
-                                    "v47"
+                                    "v45"
                                 ]
                             }
                         ],
@@ -1502,7 +1481,7 @@ Yul Control Flow Graph:
                             "out": [
                                 "v25",
                                 "phi14",
-                                "v44"
+                                "v42"
                             ]
                         },
                         "type": "BuiltinCall"
@@ -1520,7 +1499,7 @@ Yul Control Flow Graph:
                                 "in": [],
                                 "op": "returndatasize",
                                 "out": [
-                                    "v40"
+                                    "v38"
                                 ]
                             }
                         ],
@@ -1529,7 +1508,7 @@ Yul Control Flow Graph:
                                 "v25"
                             ],
                             "out": [
-                                "v40",
+                                "v38",
                                 "v25"
                             ]
                         },
@@ -1537,7 +1516,7 @@ Yul Control Flow Graph:
                     },
                     {
                         "exit": {
-                            "cond": "v51",
+                            "cond": "v49",
                             "targets": [
                                 "Block28",
                                 "Block27"
@@ -1548,7 +1527,7 @@ Yul Control Flow Graph:
                         "instructions": [
                             {
                                 "in": [
-                                    "v44",
+                                    "v42",
                                     "0x40"
                                 ],
                                 "op": "mstore",
@@ -1561,27 +1540,27 @@ Yul Control Flow Graph:
                                 ],
                                 "op": "add",
                                 "out": [
-                                    "v49"
+                                    "v47"
                                 ]
                             },
                             {
                                 "in": [
                                     "v25",
-                                    "v49"
+                                    "v47"
                                 ],
                                 "op": "sub",
                                 "out": [
-                                    "v50"
+                                    "v48"
                                 ]
                             },
                             {
                                 "in": [
                                     "0x20",
-                                    "v50"
+                                    "v48"
                                 ],
                                 "op": "slt",
                                 "out": [
-                                    "v51"
+                                    "v49"
                                 ]
                             }
                         ],
@@ -1589,7 +1568,7 @@ Yul Control Flow Graph:
                             "in": [
                                 "v25",
                                 "phi14",
-                                "v44"
+                                "v42"
                             ],
                             "out": [
                                 "v25"
@@ -1610,12 +1589,12 @@ Yul Control Flow Graph:
                                 ],
                                 "op": "shl",
                                 "out": [
-                                    "v48"
+                                    "v46"
                                 ]
                             },
                             {
                                 "in": [
-                                    "v48",
+                                    "v46",
                                     "0x00"
                                 ],
                                 "op": "mstore",
@@ -1659,7 +1638,7 @@ Yul Control Flow Graph:
                                 ],
                                 "op": "mload",
                                 "out": [
-                                    "v52"
+                                    "v50"
                                 ]
                             }
                         ],
@@ -1668,7 +1647,7 @@ Yul Control Flow Graph:
                                 "v25"
                             ],
                             "out": [
-                                "v52"
+                                "v50"
                             ]
                         },
                         "type": "BuiltinCall"
