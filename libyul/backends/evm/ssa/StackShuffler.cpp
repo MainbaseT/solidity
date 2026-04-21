@@ -24,23 +24,31 @@
 using namespace solidity::yul::ssa;
 using namespace solidity::yul::ssa::detail;
 
-Target::Target(StackData const& _args, LivenessAnalysis::LivenessData const& _liveOut, std::size_t const _targetSize):
+Target::Target(
+	StackData const& _args,
+	LivenessAnalysis::LivenessData const& _liveOut,
+	std::size_t const _targetSize,
+	SpilledVariables const* _spilledVariables
+):
 	args(_args),
 	liveOut(_liveOut),
+	spilledVariables(_spilledVariables),
 	size(_targetSize),
 	tailSize(_targetSize - _args.size())
 {
 	minCount.reserve(_args.size() + _liveOut.size());
 	for (auto const& arg: _args)
-		if (!arg.isJunk())
+		if (!arg.isJunk() && !slotIsSpilled(arg, _spilledVariables))
 			++minCount[arg];
-	for (auto const& _liveValueId: _liveOut | ranges::views::keys)
-		++minCount[StackSlot::makeValueID(_liveValueId)];
+	for (auto const& liveValueId: _liveOut | ranges::views::keys)
+		if (!(_spilledVariables && _spilledVariables->isSpilled(liveValueId)))
+			++minCount[StackSlot::makeValueID(liveValueId)];
 }
 
-State::State(StackData const& _stackData, Target const& _target, std::size_t const _reachableStackDepth):
+State::State(StackData const& _stackData, Target const& _target, SpilledVariables const* const _spilledVariables, std::size_t const _reachableStackDepth):
 	m_stackData(_stackData),
 	m_target(_target),
+	m_spilledVariables(_spilledVariables),
 	m_reachableStackDepth(_reachableStackDepth)
 {
 	m_histogram.reserve(_stackData.size());
@@ -125,7 +133,10 @@ bool State::requiredInArgs(StackSlot const& _slot) const
 
 bool State::requiredInTail(StackSlot const& _slot) const
 {
-	return _slot.isValueID() && m_target.liveOut.contains(_slot.valueID());
+	if (!_slot.isValueID() || !m_target.liveOut.contains(_slot.valueID()))
+		return false;
+	// Spilled values can be rematerialized, so they need not occupy a tail slot.
+	return !slotIsSpilled(_slot);
 }
 
 bool State::offsetInTargetArgsRegion(StackOffset const _offset) const
