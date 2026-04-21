@@ -57,7 +57,6 @@ class SSACFGBuilder
 		AsmAnalysisInfo const& _analysisInfo,
 		ControlFlowSideEffectsCollector const& _sideEffects,
 		EVMDialect const& _dialect,
-		bool _keepLiteralAssignments,
 		bool _generateDebugInfo
 	);
 public:
@@ -67,7 +66,6 @@ public:
 		AsmAnalysisInfo const& _analysisInfo,
 		EVMDialect const& _dialect,
 		Block const& _block,
-		bool _keepLiteralAssignments,
 		bool _generateDebugInfo = true
 	);
 
@@ -109,7 +107,6 @@ private:
 	AsmAnalysisInfo const& m_info;
 	ControlFlowSideEffectsCollector const& m_sideEffects;
 	EVMDialect const& m_dialect;
-	bool const m_keepLiteralAssignments;
 	bool const m_generateDebugInfo;
 	std::vector<std::tuple<Scope::Function const*, FunctionDefinition const*>> m_functionDefinitions;
 	SSACFG::BlockId m_currentBlock;

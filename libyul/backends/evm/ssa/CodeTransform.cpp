@@ -279,8 +279,7 @@ void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _oper
 				m_assembly.appendLabel(*returnLabel);
 				m_stack.pop<false>();
 			}
-		},
-		[&](SSACFG::LiteralAssignment const&){}
+		}
 	}, _operation.kind);
 	// simulate that the inputs are consumed
 	for (size_t i = 0; i < _operation.inputs.size(); ++i)
@@ -385,9 +384,6 @@ void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlo
 		},
 		[](SSACFG::Call const& _call) {
 			yulAssert(!_call.canContinue, "Last operation of Terminated block must be a non-continuable call.");
-		},
-		[](SSACFG::LiteralAssignment const&) {
-			yulAssert(false, "Terminated block cannot end with a literal assignment.");
 		}
 	}, m_cfg.operation(block.operations.back()).kind);
 	// To be sure just emit another INVALID - should be removed by optimizer.

@@ -67,9 +67,7 @@
 // FunctionEntry_i_0 -> Block4_0;
 // Block4_0 [label="\
 // Block 0; (0, max 0)\nLiveIn: \l\
-// LiveOut: v0[1], v1[1]\l\nUsed: \l\nv0 := 0x0202\l\
-// v1 := 0x0303\l\
-// "];
-// Block4_0Exit [label="FunctionReturn[v0, v1]"];
+// LiveOut: \l\nUsed: \l\n"];
+// Block4_0Exit [label="FunctionReturn[0x0202, 0x0303]"];
 // Block4_0 -> Block4_0Exit;
 // }

@@ -108,11 +108,6 @@ protected:
 				},
 				[&](SSACFG::BuiltinCall const& _call) {
 					return _call.builtin.get().name;
-				},
-				[&](SSACFG::LiteralAssignment const&)
-				{
-					yulAssert(operation.inputs.size() == 1);
-					return operation.inputs.back().str(m_cfg);
 				}
 			}, operation.kind);
 			if (!operation.outputs.empty())
@@ -120,17 +115,11 @@ protected:
 					"{} := ",
 					fmt::join(operation.outputs | ranges::views::transform(valueToString), ", ")
 				);
-			if (std::holds_alternative<SSACFG::LiteralAssignment>(operation.kind))
-				_out << fmt::format(
-					"{}\\l\\\n",
-					escapeLabel(label)
-				);
-			else
-				_out << fmt::format(
-					"{}({})\\l\\\n",
-					escapeLabel(label),
-					fmt::join(operation.inputs | ranges::views::transform(valueToString), ", ")
-				);
+			_out << fmt::format(
+				"{}({})\\l\\\n",
+				escapeLabel(label),
+				fmt::join(operation.inputs | ranges::views::transform(valueToString), ", ")
+			);
 		}
 	}
 

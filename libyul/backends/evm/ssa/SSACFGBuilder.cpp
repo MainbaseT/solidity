@@ -53,7 +53,6 @@ SSACFGBuilder::SSACFGBuilder(
 	AsmAnalysisInfo const& _analysisInfo,
 	ControlFlowSideEffectsCollector const& _sideEffects,
 	EVMDialect const& _dialect,
-	bool _keepLiteralAssignments,
 	bool _generateDebugInfo
 ):
 	m_controlFlow(_controlFlow),
@@ -61,7 +60,6 @@ SSACFGBuilder::SSACFGBuilder(
 	m_info(_analysisInfo),
 	m_sideEffects(_sideEffects),
 	m_dialect(_dialect),
-	m_keepLiteralAssignments(_keepLiteralAssignments),
 	m_generateDebugInfo(_generateDebugInfo)
 {
 }
@@ -70,7 +68,6 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 	AsmAnalysisInfo const& _analysisInfo,
 	EVMDialect const& _dialect,
 	Block const& _block,
-	bool _keepLiteralAssignments,
 	bool _generateDebugInfo
 )
 {
@@ -83,7 +80,7 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 	));
 	controlFlow->functionGraphMapping.emplace_back(nullptr, controlFlow->functionGraphs.back().get());
 	SSACFG& mainGraph = *controlFlow->functionGraphs.back();
-	SSACFGBuilder builder(*controlFlow, mainGraph, _analysisInfo, sideEffects, _dialect, _keepLiteralAssignments, _generateDebugInfo);
+	SSACFGBuilder builder(*controlFlow, mainGraph, _analysisInfo, sideEffects, _dialect, _generateDebugInfo);
 	builder.m_currentBlock = mainGraph.makeBlock(debugDataOf(_block));
 	builder.sealBlock(builder.m_currentBlock);
 	builder(_block);
@@ -129,7 +126,7 @@ void SSACFGBuilder::buildFunctionGraph(
 	cfg.arguments = arguments;
 	cfg.returns = returns;
 
-	SSACFGBuilder builder(m_controlFlow, cfg, m_info, m_sideEffects, m_dialect, m_keepLiteralAssignments, m_generateDebugInfo);
+	SSACFGBuilder builder(m_controlFlow, cfg, m_info, m_sideEffects, m_dialect, m_generateDebugInfo);
 	builder.m_currentBlock = cfg.entry;
 	builder.m_functionDefinitions = m_functionDefinitions;
 	for (auto&& [var, varId]: cfg.arguments)
@@ -431,19 +428,7 @@ void SSACFGBuilder::assign(std::vector<std::reference_wrapper<Scope::Variable co
 
 	for (auto const& [var, value]: ranges::zip_view(_variables, rhs))
 	{
-		if (m_keepLiteralAssignments && value.isLiteral())
-		{
-			SSACFG::Operation assignment{
-				.outputs = {m_graph.newVariable(m_currentBlock)},
-				.kind = SSACFG::LiteralAssignment{},
-				.inputs = {value}
-			};
-			auto opId = m_graph.makeOperation(std::move(assignment));
-			currentBlock().operations.emplace_back(opId);
-			writeVariable(var, m_currentBlock, m_graph.operation(opId).outputs.back());
-		}
-		else
-			writeVariable(var, m_currentBlock, value);
+		writeVariable(var, m_currentBlock, value);
 	}
 
 }

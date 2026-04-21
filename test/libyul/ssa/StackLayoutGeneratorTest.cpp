@@ -87,10 +87,6 @@ protected:
 				},
 				[&](SSACFG::BuiltinCall const& _call) {
 					_out << escapeLabel(_call.builtin.get().name);
-				},
-				[&](SSACFG::LiteralAssignment const&) {
-					yulAssert(operation.inputs.size() == 1);
-					_out << escapeLabel(operation.inputs.back().str(m_cfg));
 				}
 			}, operation.kind);
 			_out << "\\l\\\n";
