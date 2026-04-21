@@ -7,10 +7,10 @@ targetStackTop: [v3, v4, v5]
 targetStackTailSet: {v1}
 targetStackSize: 3
 // ----
-//             |      0      1      2
-//             +---------------------
-//    (initial)|     v3     v4     v5
-//             +---------------------
-//     (target)|     v3     v4     v5
+//             |        |      0      1      2
+//             +------- +---------------------
+//    (initial)|        |     v3     v4     v5
+//             +------- +---------------------
+//     (target)|  {v1*} |     v3     v4     v5
 // Status: Admissible
 // Spilled: {v1}
