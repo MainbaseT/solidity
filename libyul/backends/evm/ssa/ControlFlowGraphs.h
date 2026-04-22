@@ -26,18 +26,18 @@
 namespace solidity::yul::ssa
 {
 
-struct ControlFlow;
+struct ControlFlowGraphs;
 
-struct ControlFlowLiveness{
-	explicit ControlFlowLiveness(ControlFlow const& _controlFlow);
+struct ControlFlowGraphsLiveness{
+	explicit ControlFlowGraphsLiveness(ControlFlowGraphs const& _controlFlow);
 
-	std::reference_wrapper<ControlFlow const> controlFlow;
+	std::reference_wrapper<ControlFlowGraphs const> controlFlowGraphs;
 	std::vector<std::unique_ptr<LivenessAnalysis>> cfgLiveness;
 
 	std::string toDot() const;
 };
 
-struct ControlFlow
+struct ControlFlowGraphs
 {
 	using FunctionGraphID = ssa::FunctionGraphID;
 
@@ -50,10 +50,10 @@ struct ControlFlow
 		return functionGraphs.at(_id).get();
 	}
 
-	std::string toDot(ControlFlowLiveness const* _liveness=nullptr) const
+	std::string toDot(ControlFlowGraphsLiveness const* _liveness=nullptr) const
 	{
 		if (_liveness)
-			yulAssert(&_liveness->controlFlow.get() == this);
+			yulAssert(&_liveness->controlFlowGraphs.get() == this);
 		std::ostringstream output;
 		output << "digraph SSACFG {\nnodesep=0.7;\ngraph[fontname=\"DejaVu Sans\"]\nnode[shape=box,fontname=\"DejaVu Sans\"];\n\n";
 

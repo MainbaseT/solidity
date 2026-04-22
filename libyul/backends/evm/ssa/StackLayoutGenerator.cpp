@@ -82,7 +82,7 @@ void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 SSACFGStackLayout StackLayoutGenerator::generate(
 	LivenessAnalysis const& _liveness,
 	CallSites const& _callSites,
-	ControlFlow::FunctionGraphID const _graphID
+	ControlFlowGraphs::FunctionGraphID const _graphID
 )
 {
 	return StackLayoutGenerator(_liveness, _callSites, _graphID).m_resultLayout;
@@ -91,7 +91,7 @@ SSACFGStackLayout StackLayoutGenerator::generate(
 StackLayoutGenerator::StackLayoutGenerator(
 	LivenessAnalysis const& _liveness,
 	CallSites const& _callSites,
-	ControlFlow::FunctionGraphID const _graphID
+	ControlFlowGraphs::FunctionGraphID const _graphID
 ):
 	m_cfg(_liveness.cfg()),
 	m_liveness(_liveness),

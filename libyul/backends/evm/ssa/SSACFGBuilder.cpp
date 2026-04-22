@@ -24,7 +24,7 @@
 #include <libyul/backends/evm/ssa/transform/TrivialPhiEliminator.h>
 #include <libyul/backends/evm/ssa/transform/UnreachableBlockCleaner.h>
 
-#include <libyul/backends/evm/ssa/ControlFlow.h>
+#include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 
 #include <libyul/AST.h>
 #include <libyul/ControlFlowSideEffectsCollector.h>
@@ -49,7 +49,7 @@ using namespace solidity::yul;
 using namespace solidity::yul::ssa;
 
 SSACFGBuilder::SSACFGBuilder(
-	ControlFlow& _controlFlow,
+	ControlFlowGraphs& _controlFlow,
 	SSACFG& _graph,
 	AsmAnalysisInfo const& _analysisInfo,
 	ControlFlowSideEffectsCollector const& _sideEffects,
@@ -65,7 +65,7 @@ SSACFGBuilder::SSACFGBuilder(
 {
 }
 
-std::unique_ptr<ControlFlow> SSACFGBuilder::build(
+std::unique_ptr<ControlFlowGraphs> SSACFGBuilder::build(
 	AsmAnalysisInfo const& _analysisInfo,
 	EVMDialect const& _dialect,
 	Block const& _block,
@@ -74,13 +74,13 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 {
 	ControlFlowSideEffectsCollector sideEffects(_dialect, _block);
 
-	auto controlFlow = std::make_unique<ControlFlow>();
-	controlFlow->functionGraphs.emplace_back(std::make_unique<SSACFG>(
+	auto controlFlowGraphs = std::make_unique<ControlFlowGraphs>();
+	controlFlowGraphs->functionGraphs.emplace_back(std::make_unique<SSACFG>(
 		_dialect,
 		_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
 	));
-	SSACFG& mainGraph = *controlFlow->functionGraphs.back();
-	SSACFGBuilder builder(*controlFlow, mainGraph, _analysisInfo, sideEffects, _dialect, _generateDebugInfo);
+	SSACFG& mainGraph = *controlFlowGraphs->functionGraphs.back();
+	SSACFGBuilder builder(*controlFlowGraphs, mainGraph, _analysisInfo, sideEffects, _dialect, _generateDebugInfo);
 	builder.m_currentBlock = mainGraph.makeBlock(debugDataOf(_block));
 	builder.sealBlock(builder.m_currentBlock);
 	builder(_block);
@@ -89,7 +89,7 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 	mainGraph.block(builder.m_currentBlock).exit = SSACFG::BasicBlock::MainExit{};
 	transform::cleanUnreachableBlocks(mainGraph);
 	transform::eliminateTrivialPhis(mainGraph);
-	return controlFlow;
+	return controlFlowGraphs;
 }
 
 

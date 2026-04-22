@@ -18,7 +18,7 @@
 
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
-#include <libyul/backends/evm/ssa/ControlFlow.h>
+#include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 #include <libyul/backends/evm/ssa/LivenessAnalysis.h>
 #include <libyul/backends/evm/ssa/JunkAdmittingBlocksFinder.h>
 #include <libyul/backends/evm/ssa/io/DotExporterBase.h>
@@ -59,7 +59,7 @@ std::string formatPhi(SSACFG const& _cfg, SSACFG::ValueId _phiId)
 class SSACFGDotExporter: public io::DotExporterBase
 {
 public:
-	SSACFGDotExporter(SSACFG const& _cfg, size_t _functionIndex, LivenessAnalysis const* _liveness, ControlFlow const* _controlFlow):
+	SSACFGDotExporter(SSACFG const& _cfg, size_t _functionIndex, LivenessAnalysis const* _liveness, ControlFlowGraphs const* _controlFlow):
 		DotExporterBase(_cfg, _functionIndex),
 		m_liveness(_liveness),
 		m_controlFlow(_controlFlow)
@@ -143,7 +143,7 @@ protected:
 
 private:
 	LivenessAnalysis const* m_liveness;
-	ControlFlow const* m_controlFlow;
+	ControlFlowGraphs const* m_controlFlow;
 	std::unique_ptr<JunkAdmittingBlocksFinder> m_junkAdmittingBlocks;
 };
 
@@ -168,7 +168,7 @@ std::string SSACFG::toDot(
 	bool _includeDiGraphDefinition,
 	std::optional<size_t> _functionIndex,
 	LivenessAnalysis const* _liveness,
-	ControlFlow const* _controlFlow
+	ControlFlowGraphs const* _controlFlow
 ) const
 {
 	SSACFGDotExporter exporter(*this, _functionIndex.value_or(isMainGraph() ? 0 : 1), _liveness, _controlFlow);

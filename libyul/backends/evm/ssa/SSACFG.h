@@ -43,7 +43,7 @@
 namespace solidity::yul::ssa
 {
 class LivenessAnalysis;
-struct ControlFlow;
+struct ControlFlowGraphs;
 
 class SSACFG
 {
@@ -242,7 +242,7 @@ public:
 		bool _includeDiGraphDefinition=true,
 		std::optional<size_t> _functionIndex=std::nullopt,
 		LivenessAnalysis const* _liveness=nullptr,
-		ControlFlow const* _controlFlow=nullptr
+		ControlFlowGraphs const* _controlFlow=nullptr
 	) const;
 
 	PhiValue const& phiInfo(ValueId const& _valueId) const

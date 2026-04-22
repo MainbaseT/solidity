@@ -122,7 +122,7 @@ Slot parseSlot(std::string_view token)
 	if (token.starts_with(returnLabelPrefix) && token.ends_with("]"))
 	{
 		auto const inner = token.substr(returnLabelPrefix.size(), token.size() - returnLabelPrefix.size() - 1);
-		if (auto const num = util::parseArithmetic<ControlFlow::FunctionGraphID>(inner))
+		if (auto const num = util::parseArithmetic<ControlFlowGraphs::FunctionGraphID>(inner))
 			return Slot::makeFunctionReturnLabel(*num);
 		throw std::runtime_error(fmt::format("Couldn't parse ReturnLabel token: {}", token));
 	}

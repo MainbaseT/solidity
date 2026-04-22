@@ -76,8 +76,8 @@ add_library(yul
 	backends/evm/ssa/BridgeFinder.h
 	backends/evm/ssa/CodeTransform.cpp
 	backends/evm/ssa/CodeTransform.h
-	backends/evm/ssa/ControlFlow.cpp
-	backends/evm/ssa/ControlFlow.h
+	backends/evm/ssa/ControlFlowGraphs.cpp
+	backends/evm/ssa/ControlFlowGraphs.h
 	backends/evm/ssa/JunkAdmittingBlocksFinder.cpp
 	backends/evm/ssa/JunkAdmittingBlocksFinder.h
 	backends/evm/ssa/LivenessAnalysis.cpp

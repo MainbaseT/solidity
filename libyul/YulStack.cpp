@@ -396,14 +396,14 @@ Json YulStack::cfgJson() const
 		// operations to the control flow graphs
 		bool constexpr keepLiteralAssignments = true;
 		// NOTE: The block Ids are reset for each object
-		std::unique_ptr<ssa::ControlFlow> controlFlow = ssa::SSACFGBuilder::build(
+		std::unique_ptr<ssa::ControlFlowGraphs> controlFlowGraphs = ssa::SSACFGBuilder::build(
 			*_object.analysisInfo,
 			EVMDialect::strictAssemblyForEVMObjects(m_evmVersion, m_eofVersion),
 			_object.code()->root(),
 			keepLiteralAssignments
 		);
-		std::unique_ptr<ssa::ControlFlowLiveness> liveness = std::make_unique<ssa::ControlFlowLiveness>(*controlFlow);
-		return ssa::io::json::exportControlFlow(*controlFlow, liveness.get());
+		std::unique_ptr<ssa::ControlFlowGraphsLiveness> liveness = std::make_unique<ssa::ControlFlowGraphsLiveness>(*controlFlowGraphs);
+		return ssa::io::json::exportControlFlow(*controlFlowGraphs, liveness.get());
 	};
 
 	std::function<Json(std::vector<std::shared_ptr<ObjectNode>>)> exportCFGFromSubObjects;

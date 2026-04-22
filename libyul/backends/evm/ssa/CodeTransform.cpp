@@ -44,29 +44,29 @@ void assertLayoutCompatibility(StackData const& _layout1, StackData const& _layo
 void CodeTransform::run
 (
 	AbstractAssembly& _assembly,
-	ControlFlowLiveness const& _controlFlowLiveness,
+	ControlFlowGraphsLiveness const& _controlFlowLiveness,
 	BuiltinContext& _builtinContext
 )
 {
 	yulAssert(!_controlFlowLiveness.cfgLiveness.empty());
-	ControlFlow const& controlFlow = _controlFlowLiveness.controlFlow.get();
-	yulAssert(controlFlow.functionGraphs.size() == _controlFlowLiveness.cfgLiveness.size());
-	FunctionLabels const functionLabels = registerFunctionLabels(_assembly, controlFlow);
+	ControlFlowGraphs const& controlFlowGraphs = _controlFlowLiveness.controlFlowGraphs.get();
+	yulAssert(controlFlowGraphs.functionGraphs.size() == _controlFlowLiveness.cfgLiveness.size());
+	FunctionLabels const functionLabels = registerFunctionLabels(_assembly, controlFlowGraphs);
 
-	for (std::size_t functionIndex = 0; functionIndex < controlFlow.functionGraphs.size(); ++functionIndex)
+	for (std::size_t functionIndex = 0; functionIndex < controlFlowGraphs.functionGraphs.size(); ++functionIndex)
 	{
-		std::unique_ptr<SSACFG> const& functionGraphPtr = controlFlow.functionGraphs[functionIndex];
+		std::unique_ptr<SSACFG> const& functionGraphPtr = controlFlowGraphs.functionGraphs[functionIndex];
 		yulAssert(functionGraphPtr);
 		SSACFG const& cfg = *functionGraphPtr;
 		auto const callSites = gatherCallSites(cfg);
 		auto const& liveness = _controlFlowLiveness.cfgLiveness[functionIndex];
 		yulAssert(liveness);
-		auto const graphID = static_cast<ControlFlow::FunctionGraphID>(functionIndex);
+		auto const graphID = static_cast<ControlFlowGraphs::FunctionGraphID>(functionIndex);
 		auto const& stackLayout = StackLayoutGenerator::generate(*liveness, callSites, graphID);
 		CodeTransform transform(
 			_assembly,
 			_builtinContext,
-			controlFlow,
+			controlFlowGraphs,
 			functionLabels,
 			callSites,
 			cfg,
@@ -78,7 +78,7 @@ void CodeTransform::run
 }
 
 CodeTransform::FunctionLabels CodeTransform::registerFunctionLabels(
-	AbstractAssembly& _assembly, ControlFlow const& _controlFlow)
+	AbstractAssembly& _assembly, ControlFlowGraphs const& _controlFlow)
 {
 	FunctionLabels functionLabels;
 	std::set<std::string> assignedFunctionNames;
@@ -90,7 +90,7 @@ CodeTransform::FunctionLabels CodeTransform::registerFunctionLabels(
 		SSACFG const& functionGraph = *functionGraphPtr;
 		if (functionGraph.isMainGraph())
 			continue;
-		auto const graphID = static_cast<ControlFlow::FunctionGraphID>(index);
+		auto const graphID = static_cast<ControlFlowGraphs::FunctionGraphID>(index);
 		bool const nameAlreadySeen = !assignedFunctionNames.insert(functionGraph.name).second;
 		auto const sourceID = [&]() -> std::optional<std::size_t> {
 			if (functionGraph.debugInfo && functionGraph.debugInfo->graphDebugData)
@@ -112,12 +112,12 @@ CodeTransform::FunctionLabels CodeTransform::registerFunctionLabels(
 CodeTransform::CodeTransform(
 	AbstractAssembly& _assembly,
 	BuiltinContext& _builtinContext,
-	ControlFlow const& _controlFlow,
+	ControlFlowGraphs const& _controlFlow,
 	FunctionLabels const& _functionLabels,
 	CallSites const& _callSites,
 	SSACFG const& _cfg,
 	SSACFGStackLayout const& _stackLayout,
-	ControlFlow::FunctionGraphID _graphID
+	ControlFlowGraphs::FunctionGraphID _graphID
 ):
 	m_assembly(_assembly),
 	m_builtinContext(_builtinContext),

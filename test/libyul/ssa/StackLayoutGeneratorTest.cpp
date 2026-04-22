@@ -19,7 +19,7 @@
 #include <test/libyul/ssa/StackLayoutGeneratorTest.h>
 
 #include <libyul/backends/evm/ssa/io/DotExporterBase.h>
-#include <libyul/backends/evm/ssa/ControlFlow.h>
+#include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 #include <libyul/backends/evm/ssa/SSACFGBuilder.h>
 #include <libyul/backends/evm/ssa/Stack.h>
 #include <libyul/backends/evm/ssa/StackLayout.h>
@@ -60,7 +60,7 @@ public:
 		SSACFG const& _cfg,
 		std::size_t _functionIndex,
 		SSACFGStackLayout const& _layout,
-		ControlFlow const& _controlFlow
+		ControlFlowGraphs const& _controlFlow
 	):
 		DotExporterBase(_cfg, _functionIndex),
 		m_layout(_layout),
@@ -111,7 +111,7 @@ protected:
 
 private:
 	SSACFGStackLayout const& m_layout;
-	ControlFlow const& m_controlFlow;
+	ControlFlowGraphs const& m_controlFlow;
 };
 
 }
@@ -151,7 +151,7 @@ frontend::test::TestCase::TestResult StackLayoutGeneratorTest::run(std::ostream&
 		auto const* evmDialect = dynamic_cast<EVMDialect const*>(object.dialect());
 		yulAssert(evmDialect);
 
-		std::unique_ptr<ControlFlow> const controlFlow = SSACFGBuilder::build(
+		std::unique_ptr<ControlFlowGraphs> const controlFlowGraphs = SSACFGBuilder::build(
 			*object.analysisInfo,
 			*evmDialect,
 			object.code()->root(),
@@ -163,15 +163,15 @@ frontend::test::TestCase::TestResult StackLayoutGeneratorTest::run(std::ostream&
 
 		m_obtainedResult += "digraph SSACFG {\nnodesep=0.7;\ngraph[fontname=\"DejaVu Sans\", rankdir=LR]\nnode[shape=box,fontname=\"DejaVu Sans\"];\n\n";
 
-		for (std::size_t index = 0; index < controlFlow->functionGraphs.size(); ++index)
+		for (std::size_t index = 0; index < controlFlowGraphs->functionGraphs.size(); ++index)
 		{
-			auto const& cfg = *controlFlow->functionGraphs[index];
+			auto const& cfg = *controlFlowGraphs->functionGraphs[index];
 			SSACFGStackLayout const layout = StackLayoutGenerator::generate(
 				LivenessAnalysis(cfg),
 				gatherCallSites(cfg),
-				static_cast<ControlFlow::FunctionGraphID>(index)
+				static_cast<ControlFlowGraphs::FunctionGraphID>(index)
 			);
-			StackLayoutDotExporter exporter(cfg, index, layout, *controlFlow);
+			StackLayoutDotExporter exporter(cfg, index, layout, *controlFlowGraphs);
 			if (!cfg.isMainGraph())
 				m_obtainedResult += exporter.exportFunction(cfg, false);
 			else

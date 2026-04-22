@@ -43,7 +43,7 @@ Json toJson(SSACFG const& _cfg, std::vector<SSACFG::ValueId> const& _values)
 	return ret;
 }
 
-Json toJson(Json& _ret, SSACFG const& _cfg, SSACFG::Operation const& _operation, ControlFlow const& _controlFlow)
+Json toJson(Json& _ret, SSACFG const& _cfg, SSACFG::Operation const& _operation, ControlFlowGraphs const& _controlFlow)
 {
 	Json opJson = Json::object();
 	std::visit(util::GenericVisitor{
@@ -83,7 +83,7 @@ Json toJson(Json& _ret, SSACFG const& _cfg, SSACFG::Operation const& _operation,
 	return opJson;
 }
 
-Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const* _liveness, ControlFlow const& _controlFlow)
+Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const* _liveness, ControlFlowGraphs const& _controlFlow)
 {
 	auto const valueToString = [&](LivenessAnalysis::LivenessData::LiveCounts::value_type const& _live) { return _live.first.str(_cfg); };
 
@@ -132,7 +132,7 @@ Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const
 	return blockJson;
 }
 
-Json exportBlock(SSACFG const& _cfg, SSACFG::BlockId _entryId, LivenessAnalysis const* _liveness, ControlFlow const& _controlFlow)
+Json exportBlock(SSACFG const& _cfg, SSACFG::BlockId _entryId, LivenessAnalysis const* _liveness, ControlFlowGraphs const& _controlFlow)
 {
 	Json blocksJson = Json::array();
 	util::BreadthFirstSearch<SSACFG::BlockId> bfs{{{_entryId}}};
@@ -172,7 +172,7 @@ Json exportBlock(SSACFG const& _cfg, SSACFG::BlockId _entryId, LivenessAnalysis 
 	return blocksJson;
 }
 
-Json exportFunction(SSACFG const& _cfg, LivenessAnalysis const* _liveness, ControlFlow const& _controlFlow)
+Json exportFunction(SSACFG const& _cfg, LivenessAnalysis const* _liveness, ControlFlowGraphs const& _controlFlow)
 {
 	Json functionJson = Json::object();
 	functionJson["type"] = "Function";
@@ -186,10 +186,10 @@ Json exportFunction(SSACFG const& _cfg, LivenessAnalysis const* _liveness, Contr
 
 }
 
-Json io::json::exportControlFlow(ControlFlow const& _controlFlow, ControlFlowLiveness const* _liveness)
+Json io::json::exportControlFlow(ControlFlowGraphs const& _controlFlow, ControlFlowGraphsLiveness const* _liveness)
 {
 	if (_liveness)
-		yulAssert(&_liveness->controlFlow.get() == &_controlFlow);
+		yulAssert(&_liveness->controlFlowGraphs.get() == &_controlFlow);
 
 	Json yulObjectJson = Json::object();
 	yulObjectJson["blocks"] = exportBlock(

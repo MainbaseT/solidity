@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include <libyul/backends/evm/ssa/ControlFlow.h>
+#include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
 #include <range/v3/algorithm/find.hpp>
@@ -85,7 +85,7 @@ public:
 		ValueID, // u32
 		Junk, // empty
 		FunctionCallReturnLabel, // index into corresponding stack layout's call sites
-		FunctionReturnLabel // identifying the function graph via ControlFlow
+		FunctionReturnLabel // identifying the function graph via ControlFlowGraphs
 	};
 
 	constexpr StackSlot() = default;
@@ -101,13 +101,13 @@ public:
 	constexpr bool isJunk() const noexcept { return kind() == Kind::Junk; }
 	constexpr Kind kind() const noexcept { return m_kind; }
 
-	ControlFlow::FunctionGraphID functionReturnLabel() const { yulAssert(isFunctionReturnLabel()); return m_payload; }
+	ControlFlowGraphs::FunctionGraphID functionReturnLabel() const { yulAssert(isFunctionReturnLabel()); return m_payload; }
 	CallSites::CallSiteID functionCallReturnLabel() const { yulAssert(isFunctionCallReturnLabel()); return m_payload; }
 	SSACFG::ValueId valueID() const { yulAssert(isValueID()); return {m_payload, m_valueIdKind}; }
 
 	static constexpr StackSlot makeJunk() { return {0, Kind::Junk}; }
 	static constexpr StackSlot makeValueID(SSACFG::ValueId const& _valueID) { return {_valueID.value(), Kind::ValueID, _valueID.kind()}; }
-	static constexpr StackSlot makeFunctionReturnLabel(ControlFlow::FunctionGraphID const _graphID) { return {_graphID, Kind::FunctionReturnLabel}; }
+	static constexpr StackSlot makeFunctionReturnLabel(ControlFlowGraphs::FunctionGraphID const _graphID) { return {_graphID, Kind::FunctionReturnLabel}; }
 	static constexpr StackSlot makeFunctionCallReturnLabel(CallSites::CallSiteID const _callSiteID) { return {_callSiteID, Kind::FunctionCallReturnLabel};	}
 
 	auto operator<=>(StackSlot const&) const = default;

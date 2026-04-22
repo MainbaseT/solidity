@@ -95,27 +95,27 @@ class CodeTransform
 public:
 	static void run(
 		AbstractAssembly& _assembly,
-		ControlFlowLiveness const& _liveness,
+		ControlFlowGraphsLiveness const& _liveness,
 		BuiltinContext& _builtinContext
 	);
 
 private:
-	using FunctionLabels = std::map<ControlFlow::FunctionGraphID, AbstractAssembly::LabelID>;
+	using FunctionLabels = std::map<ControlFlowGraphs::FunctionGraphID, AbstractAssembly::LabelID>;
 
 	static FunctionLabels registerFunctionLabels(
 		AbstractAssembly& _assembly,
-		ControlFlow const& _controlFlow
+		ControlFlowGraphs const& _controlFlow
 	);
 
 	CodeTransform(
 		AbstractAssembly& _assembly,
 		BuiltinContext& _builtinContext,
-		ControlFlow const& _controlFlow,
+		ControlFlowGraphs const& _controlFlow,
 		FunctionLabels const& _functionLabels,
 		CallSites const& _callSites,
 		SSACFG const& _cfg,
 		SSACFGStackLayout const& _stackLayout,
-		ControlFlow::FunctionGraphID _graphID);
+		ControlFlowGraphs::FunctionGraphID _graphID);
 
 	void operator()(SSACFG::BlockId _blockId);
 	void operator()(SSACFG::OperationId _opId, StackData const& _operationInputLayout);
@@ -129,12 +129,12 @@ private:
 
 	AbstractAssembly& m_assembly;
 	BuiltinContext& m_builtinContext;
-	ControlFlow const& m_controlFlow;
+	ControlFlowGraphs const& m_controlFlow;
 	FunctionLabels const& m_functionLabels;
 	CallSites const& m_callSites;
 	SSACFG const& m_cfg;
 	SSACFGStackLayout const& m_stackLayout;
-	ControlFlow::FunctionGraphID const m_graphID;
+	ControlFlowGraphs::FunctionGraphID const m_graphID;
 
 	std::vector<std::uint8_t> m_blockIsTransformed;
 	std::vector<AbstractAssembly::LabelID> m_blockLabels;
