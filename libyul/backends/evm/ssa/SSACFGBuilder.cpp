@@ -379,7 +379,6 @@ void SSACFGBuilder::registerFunctionDefinition(FunctionDefinition const& _functi
 	yulAssert(m_scope, "");
 	yulAssert(m_scope->identifiers.count(_functionDefinition.name), "");
 	auto& function = std::get<Scope::Function>(m_scope->identifiers.at(_functionDefinition.name));
-	m_graph.functions.emplace_back(function);
 	m_functionDefinitions.emplace_back(&function, &_functionDefinition);
 
 	// Allocate the graph slot up front so sibling functions (and mutually-recursive pairs) can
