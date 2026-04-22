@@ -42,7 +42,7 @@ struct ControlFlowLiveness{
 
 struct ControlFlow
 {
-	using FunctionGraphID = std::uint32_t;
+	using FunctionGraphID = ssa::FunctionGraphID;
 
 	static FunctionGraphID constexpr mainGraphID() noexcept { return 0; }
 

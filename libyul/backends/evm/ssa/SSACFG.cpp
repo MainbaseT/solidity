@@ -165,8 +165,8 @@ std::string SSACFG::toDot(
 	LivenessAnalysis const* _liveness
 ) const
 {
-	SSACFGDotExporter exporter(*this, _functionIndex.value_or(function ? 1 : 0), _liveness);
-	if (function)
+	SSACFGDotExporter exporter(*this, _functionIndex.value_or(isMainGraph() ? 0 : 1), _liveness);
+	if (!isMainGraph())
 		return exporter.exportFunction(*function, _includeDiGraphDefinition);
 	else
 		return exporter.exportBlocks(entry, _includeDiGraphDefinition);

@@ -275,13 +275,15 @@ public:
 	std::unique_ptr<DebugInfo> debugInfo;
 	BlockId entry = BlockId{0};
 	std::set<BlockId> exits;
-	Scope::Function const* function = nullptr;
+	std::string name{};
 	bool canContinue = true;
 	std::vector<std::tuple<std::reference_wrapper<Scope::Variable const>, ValueId>> arguments;
 	std::vector<std::reference_wrapper<Scope::Variable const>> returns;
 	std::vector<std::reference_wrapper<Scope::Function const>> functions;
 	// Container for artificial calls generated for switch statements.
 	std::list<FunctionCall> ghostCalls;
+
+	bool isMainGraph() const { return name.empty(); }
 };
 
 }

@@ -34,6 +34,8 @@ namespace solidity::yul::ssa
 
 class SSACFG;
 
+using FunctionGraphID = std::uint32_t;
+
 struct BlockId
 {
 	using ValueType = std::uint32_t;

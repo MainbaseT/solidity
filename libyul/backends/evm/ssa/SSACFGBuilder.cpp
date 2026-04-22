@@ -122,6 +122,7 @@ void SSACFGBuilder::buildFunctionGraph(
 	if (cfg.debugInfo)
 		cfg.debugInfo->graphDebugData = _functionDefinition->debugData;
 	cfg.function = _function;
+	cfg.name = _function->name.str();
 	cfg.canContinue = m_sideEffects.functionSideEffects().at(_functionDefinition).canContinue;
 	cfg.arguments = arguments;
 	cfg.returns = returns;
