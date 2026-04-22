@@ -30,7 +30,7 @@
 // Block0_0Exit [label="MainExit"];
 // Block0_0 -> Block0_0Exit;
 // FunctionEntry_sum_0 [label="function sum:
-//  s := sum(v0)"];
+//  [1 returns] := sum(v0)"];
 // FunctionEntry_sum_0 -> Block1_0;
 // Block1_0 [label="\
 // IN: [ReturnLabel[1], v0]\l\

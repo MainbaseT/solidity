@@ -39,7 +39,7 @@
 // Block0_0Exit [label="MainExit"];
 // Block0_0 -> Block0_0Exit;
 // FunctionEntry_pair_0 [label="function pair:
-//  x, y := pair(v0)"];
+//  [2 returns] := pair(v0)"];
 // FunctionEntry_pair_0 -> Block1_0;
 // Block1_0 [label="\
 // IN: [ReturnLabel[1], v0]\l\

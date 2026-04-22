@@ -44,7 +44,7 @@
 // Block0_0Exit [label="Terminated"];
 // Block0_0 -> Block0_0Exit;
 // FunctionEntry_f_0 [label="function f:
-//  r := f(v0, v1)"];
+//  [1 returns] := f(v0, v1)"];
 // FunctionEntry_f_0 -> Block1_0;
 // Block1_0 [label="\
 // IN: [ReturnLabel[1], v1, v0]\l\
@@ -94,7 +94,7 @@
 // Block3_0Exit [label="Terminated"];
 // Block3_0 -> Block3_0Exit;
 // FunctionEntry_i_0 [label="function i:
-//  v, w := i()"];
+//  [2 returns] := i()"];
 // FunctionEntry_i_0 -> Block4_0;
 // Block4_0 [label="\
 // IN: [ReturnLabel[4]]\l\

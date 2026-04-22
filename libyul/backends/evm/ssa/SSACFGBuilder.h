@@ -40,9 +40,10 @@
 
 #include <libyul/backends/evm/EVMDialect.h>
 
-#include <libyul/backends/evm/ssa/ControlFlow.h>
+#include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
+#include <map>
 #include <stack>
 #include <unordered_map>
 
@@ -52,7 +53,7 @@ namespace solidity::yul::ssa
 class SSACFGBuilder
 {
 	SSACFGBuilder(
-		ControlFlow& _controlFlow,
+		ControlFlowGraphs& _controlFlow,
 		SSACFG& _graph,
 		AsmAnalysisInfo const& _analysisInfo,
 		ControlFlowSideEffectsCollector const& _sideEffects,
@@ -62,7 +63,7 @@ class SSACFGBuilder
 public:
 	SSACFGBuilder(SSACFGBuilder const&) = delete;
 	SSACFGBuilder& operator=(SSACFGBuilder const&) = delete;
-	static std::unique_ptr<ControlFlow> build(
+	static std::unique_ptr<ControlFlowGraphs> build(
 		AsmAnalysisInfo const& _analysisInfo,
 		EVMDialect const& _dialect,
 		Block const& _block,
@@ -102,13 +103,17 @@ private:
 	void emitUpsilon(SSACFG::BlockId _block, SSACFG::ValueId _value, SSACFG::ValueId _phi);
 	void writeVariable(Scope::Variable const& _variable, SSACFG::BlockId _block, SSACFG::ValueId _value);
 
-	ControlFlow& m_controlFlow;
+	ControlFlowGraphs& m_controlFlow;
 	SSACFG& m_graph;
 	AsmAnalysisInfo const& m_info;
 	ControlFlowSideEffectsCollector const& m_sideEffects;
 	EVMDialect const& m_dialect;
 	bool const m_generateDebugInfo;
 	std::vector<std::tuple<Scope::Function const*, FunctionDefinition const*>> m_functionDefinitions;
+	/// Translation map from Yul-AST function scopes to their corresponding FunctionGraphIDs
+	std::map<Scope::Function const*, FunctionGraphID> m_functionScopeToID;
+	/// Return variable scopes of the function currently being built
+	std::vector<std::reference_wrapper<Scope::Variable const>> m_currentReturnVars;
 	SSACFG::BlockId m_currentBlock;
 	SSACFG::BasicBlock& currentBlock() { return m_graph.block(m_currentBlock); }
 	langutil::DebugData::ConstPtr currentBlockDebugData() const

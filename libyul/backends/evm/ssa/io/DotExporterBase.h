@@ -43,7 +43,7 @@ public:
 	virtual ~DotExporterBase() = default;
 
 	std::string exportBlocks(SSACFG::BlockId _entry, bool _wrapInDigraph = true);
-	std::string exportFunction(Scope::Function const& _function, bool _wrapInDigraph = true);
+	std::string exportFunction(SSACFG const& _function, bool _wrapInDigraph = true);
 
 protected:
 	/// Override to write the content inside a block's dot label.

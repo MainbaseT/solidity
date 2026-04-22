@@ -24,7 +24,7 @@
 #include <libyul/backends/evm/ssa/transform/TrivialPhiEliminator.h>
 #include <libyul/backends/evm/ssa/transform/UnreachableBlockCleaner.h>
 
-#include <libyul/backends/evm/ssa/ControlFlow.h>
+#include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 
 #include <libyul/AST.h>
 #include <libyul/ControlFlowSideEffectsCollector.h>
@@ -35,6 +35,7 @@
 #include <libsolutil/StringUtils.h>
 #include <libsolutil/Visitor.h>
 
+#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/drop_last.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -48,7 +49,7 @@ using namespace solidity::yul;
 using namespace solidity::yul::ssa;
 
 SSACFGBuilder::SSACFGBuilder(
-	ControlFlow& _controlFlow,
+	ControlFlowGraphs& _controlFlow,
 	SSACFG& _graph,
 	AsmAnalysisInfo const& _analysisInfo,
 	ControlFlowSideEffectsCollector const& _sideEffects,
@@ -64,7 +65,7 @@ SSACFGBuilder::SSACFGBuilder(
 {
 }
 
-std::unique_ptr<ControlFlow> SSACFGBuilder::build(
+std::unique_ptr<ControlFlowGraphs> SSACFGBuilder::build(
 	AsmAnalysisInfo const& _analysisInfo,
 	EVMDialect const& _dialect,
 	Block const& _block,
@@ -73,14 +74,13 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 {
 	ControlFlowSideEffectsCollector sideEffects(_dialect, _block);
 
-	auto controlFlow = std::make_unique<ControlFlow>();
-	controlFlow->functionGraphs.emplace_back(std::make_unique<SSACFG>(
+	auto controlFlowGraphs = std::make_unique<ControlFlowGraphs>();
+	controlFlowGraphs->functionGraphs.emplace_back(std::make_unique<SSACFG>(
 		_dialect,
 		_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
 	));
-	controlFlow->functionGraphMapping.emplace_back(nullptr, controlFlow->functionGraphs.back().get());
-	SSACFG& mainGraph = *controlFlow->functionGraphs.back();
-	SSACFGBuilder builder(*controlFlow, mainGraph, _analysisInfo, sideEffects, _dialect, _generateDebugInfo);
+	SSACFG& mainGraph = *controlFlowGraphs->functionGraphs.back();
+	SSACFGBuilder builder(*controlFlowGraphs, mainGraph, _analysisInfo, sideEffects, _dialect, _generateDebugInfo);
 	builder.m_currentBlock = mainGraph.makeBlock(debugDataOf(_block));
 	builder.sealBlock(builder.m_currentBlock);
 	builder(_block);
@@ -89,7 +89,7 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 	mainGraph.block(builder.m_currentBlock).exit = SSACFG::BasicBlock::MainExit{};
 	transform::cleanUnreachableBlocks(mainGraph);
 	transform::eliminateTrivialPhis(mainGraph);
-	return controlFlow;
+	return controlFlowGraphs;
 }
 
 
@@ -98,40 +98,41 @@ void SSACFGBuilder::buildFunctionGraph(
 	FunctionDefinition const* _functionDefinition
 )
 {
-	m_controlFlow.functionGraphs.emplace_back(std::make_unique<SSACFG>(
-		m_dialect,
-		m_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
-	));
-	auto& cfg = *m_controlFlow.functionGraphs.back();
-	m_controlFlow.functionGraphMapping.emplace_back(_function, &cfg);
+	// The graph slot and the FunctionGraphID have already been allocated in
+	// `registerFunctionDefinition`; this call builds the body into that slot.
+	auto const graphIt = m_functionScopeToID.find(_function);
+	yulAssert(graphIt != m_functionScopeToID.end(), "Function graph must be registered before building.");
+	auto& cfg = *m_controlFlow.functionGraphs[graphIt->second];
 
 	yulAssert(m_info.scopes.at(&_functionDefinition->body), "");
 	Scope* virtualFunctionScope = m_info.scopes.at(m_info.virtualBlocks.at(_functionDefinition).get()).get();
 	yulAssert(virtualFunctionScope, "");
 
 	cfg.entry = cfg.makeBlock(debugDataOf(_functionDefinition->body));
-	auto arguments = _functionDefinition->parameters | ranges::views::transform([&](auto const& _param) {
+	auto argumentBindings = _functionDefinition->parameters | ranges::views::transform([&](auto const& _param) {
 		auto const& var = std::get<Scope::Variable>(virtualFunctionScope->identifiers.at(_param.name));
 		// Note: cannot use std::make_tuple since it unwraps reference wrappers.
 		return std::tuple{std::cref(var), cfg.newVariable(cfg.entry)};
 	}) | ranges::to<std::vector>;
-	auto returns = _functionDefinition->returnVariables | ranges::views::transform([&](auto const& _param) {
+	auto returnVars = _functionDefinition->returnVariables | ranges::views::transform([&](auto const& _param) {
 		return std::cref(std::get<Scope::Variable>(virtualFunctionScope->identifiers.at(_param.name)));
-	}) | ranges::to<std::vector>;
+	}) | ranges::to<std::vector<std::reference_wrapper<Scope::Variable const>>>();
 
 	if (cfg.debugInfo)
 		cfg.debugInfo->graphDebugData = _functionDefinition->debugData;
-	cfg.function = _function;
 	cfg.canContinue = m_sideEffects.functionSideEffects().at(_functionDefinition).canContinue;
-	cfg.arguments = arguments;
-	cfg.returns = returns;
+	cfg.arguments = argumentBindings
+		| ranges::views::transform([](auto const& _binding) { return std::get<1>(_binding); })
+		| ranges::to<std::vector>;
 
 	SSACFGBuilder builder(m_controlFlow, cfg, m_info, m_sideEffects, m_dialect, m_generateDebugInfo);
 	builder.m_currentBlock = cfg.entry;
 	builder.m_functionDefinitions = m_functionDefinitions;
-	for (auto&& [var, varId]: cfg.arguments)
+	builder.m_functionScopeToID = m_functionScopeToID;
+	builder.m_currentReturnVars = returnVars;
+	for (auto&& [var, varId]: argumentBindings)
 		builder.currentDef(var, cfg.entry) = varId;
-	for (auto const& var: cfg.returns)
+	for (auto const& var: returnVars)
 		builder.currentDef(var.get(), cfg.entry) = builder.zero();
 	builder.sealBlock(cfg.entry);
 	builder(_functionDefinition->body);
@@ -366,7 +367,7 @@ void SSACFGBuilder::operator()(Leave const& _leaveStatement)
 	if (m_graph.debugInfo)
 		m_graph.debugInfo->setExitDebugData(m_currentBlock, debugDataOf(_leaveStatement));
 	currentBlock().exit = SSACFG::BasicBlock::FunctionReturn{
-		m_graph.returns | ranges::views::transform([&](auto _var) {
+		m_currentReturnVars | ranges::views::transform([&](auto _var) {
 			return readVariable(_var, m_currentBlock);
 		}) | ranges::to<std::vector>
 	};
@@ -379,8 +380,19 @@ void SSACFGBuilder::registerFunctionDefinition(FunctionDefinition const& _functi
 	yulAssert(m_scope, "");
 	yulAssert(m_scope->identifiers.count(_functionDefinition.name), "");
 	auto& function = std::get<Scope::Function>(m_scope->identifiers.at(_functionDefinition.name));
-	m_graph.functions.emplace_back(function);
 	m_functionDefinitions.emplace_back(&function, &_functionDefinition);
+
+	// Allocate the graph slot up front so sibling functions (and mutually-recursive pairs) can
+	// reference this function by its FunctionGraphID when their bodies are built later.
+	m_controlFlow.functionGraphs.emplace_back(std::make_unique<SSACFG>(
+		m_dialect,
+		m_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
+	));
+	auto const graphID = static_cast<FunctionGraphID>(m_controlFlow.functionGraphs.size() - 1);
+	auto& cfg = *m_controlFlow.functionGraphs.back();
+	cfg.name = function.name.str();
+	cfg.numReturns = _functionDefinition.returnVariables.size();
+	m_functionScopeToID[&function] = graphID;
 }
 
 void SSACFGBuilder::operator()(Block const& _block)
@@ -456,7 +468,9 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 			auto const* definition = findFunctionDefinition(&function);
 			yulAssert(definition);
 			canContinue = m_sideEffects.functionSideEffects().at(definition).canContinue;
-			SSACFG::Operation result{{}, SSACFG::Call{function, _call, canContinue}, {}};
+			auto const calleeIt = m_functionScopeToID.find(&function);
+			yulAssert(calleeIt != m_functionScopeToID.end(), "Called function has no registered graph id.");
+			SSACFG::Operation result{{}, SSACFG::Call{calleeIt->second, _call, canContinue}, {}};
 			for (auto const& arg: _call.arguments | ranges::views::reverse)
 				result.inputs.emplace_back(std::visit(*this, arg));
 			for (size_t i = 0; i < function.numReturns; ++i)

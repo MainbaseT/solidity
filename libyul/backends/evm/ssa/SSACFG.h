@@ -30,7 +30,6 @@
 #include <libyul/AsmAnalysisInfo.h>
 #include <libyul/Dialect.h>
 #include <libyul/Exceptions.h>
-#include <libyul/Scope.h>
 
 #include <libsolutil/Numeric.h>
 
@@ -38,11 +37,13 @@
 #include <deque>
 #include <functional>
 #include <list>
+#include <string>
 #include <vector>
 
 namespace solidity::yul::ssa
 {
 class LivenessAnalysis;
+struct ControlFlowGraphs;
 
 class SSACFG
 {
@@ -74,7 +75,7 @@ public:
 	};
 	struct Call
 	{
-		std::reference_wrapper<Scope::Function const> function;
+		FunctionGraphID graphID;
 		std::reference_wrapper<FunctionCall const> call;
 		bool canContinue;
 	};
@@ -240,7 +241,8 @@ public:
 	std::string toDot(
 		bool _includeDiGraphDefinition=true,
 		std::optional<size_t> _functionIndex=std::nullopt,
-		LivenessAnalysis const* _liveness=nullptr
+		LivenessAnalysis const* _liveness=nullptr,
+		ControlFlowGraphs const* _controlFlow=nullptr
 	) const;
 
 	PhiValue const& phiInfo(ValueId const& _valueId) const
@@ -275,13 +277,14 @@ public:
 	std::unique_ptr<DebugInfo> debugInfo;
 	BlockId entry = BlockId{0};
 	std::set<BlockId> exits;
-	Scope::Function const* function = nullptr;
+	std::string name{};
 	bool canContinue = true;
-	std::vector<std::tuple<std::reference_wrapper<Scope::Variable const>, ValueId>> arguments;
-	std::vector<std::reference_wrapper<Scope::Variable const>> returns;
-	std::vector<std::reference_wrapper<Scope::Function const>> functions;
+	std::vector<ValueId> arguments;
+	std::size_t numReturns = 0;
 	// Container for artificial calls generated for switch statements.
 	std::list<FunctionCall> ghostCalls;
+
+	bool isMainGraph() const { return name.empty(); }
 };
 
 }

@@ -82,7 +82,7 @@ void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 SSACFGStackLayout StackLayoutGenerator::generate(
 	LivenessAnalysis const& _liveness,
 	CallSites const& _callSites,
-	ControlFlow::FunctionGraphID const _graphID
+	ControlFlowGraphs::FunctionGraphID const _graphID
 )
 {
 	return StackLayoutGenerator(_liveness, _callSites, _graphID).m_resultLayout;
@@ -91,13 +91,13 @@ SSACFGStackLayout StackLayoutGenerator::generate(
 StackLayoutGenerator::StackLayoutGenerator(
 	LivenessAnalysis const& _liveness,
 	CallSites const& _callSites,
-	ControlFlow::FunctionGraphID const _graphID
+	ControlFlowGraphs::FunctionGraphID const _graphID
 ):
 	m_cfg(_liveness.cfg()),
 	m_liveness(_liveness),
 	m_callSites(_callSites),
 	m_graphID(_graphID),
-	m_hasFunctionReturnLabel(_liveness.cfg().function && _liveness.cfg().canContinue),
+	m_hasFunctionReturnLabel(!_liveness.cfg().isMainGraph() && _liveness.cfg().canContinue),
 	m_junkAdmittingBlocksFinder(std::make_unique<JunkAdmittingBlocksFinder>(_liveness.cfg(), _liveness.topologicalSort())),
 	m_inputStackProposalsPerBlock(m_cfg.numBlocks()),
 	m_resultLayout(m_cfg.numBlocks())
@@ -144,12 +144,12 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 
 	if (_blockId == m_cfg.entry)
 	{
-		if (m_cfg.function)
+		if (!m_cfg.isMainGraph())
 		{
 			blockLayout.stackIn.reserve(m_cfg.arguments.size() + (m_hasFunctionReturnLabel ? 1u : 0u));
 			if (m_hasFunctionReturnLabel)
 				blockLayout.stackIn.push_back(Slot::makeFunctionReturnLabel(m_graphID));
-			for (auto const& [_, valueID]: m_cfg.arguments | ranges::views::reverse)
+			for (auto const& valueID: m_cfg.arguments | ranges::views::reverse)
 				blockLayout.stackIn.push_back(Slot::makeValueID(valueID));
 		}
 		m_resultLayout[_blockId] = blockLayout;

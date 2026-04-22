@@ -35,14 +35,14 @@ public:
 	static SSACFGStackLayout generate(
 		LivenessAnalysis const& _liveness,
 		CallSites const& _callSites,
-		ControlFlow::FunctionGraphID _graphID
+		ControlFlowGraphs::FunctionGraphID _graphID
 	);
 
 private:
 	explicit StackLayoutGenerator(
 		LivenessAnalysis const& _liveness,
 		CallSites const& _callSites,
-		ControlFlow::FunctionGraphID _graphID
+		ControlFlowGraphs::FunctionGraphID _graphID
 	);
 
 	void defineStackIn(SSACFG::BlockId const& _blockId);
@@ -51,7 +51,7 @@ private:
 	SSACFG const& m_cfg;
 	LivenessAnalysis const& m_liveness;
 	CallSites const& m_callSites;
-	ControlFlow::FunctionGraphID m_graphID;
+	ControlFlowGraphs::FunctionGraphID m_graphID;
 	bool m_hasFunctionReturnLabel;
 
 	std::unique_ptr<JunkAdmittingBlocksFinder> m_junkAdmittingBlocksFinder;
