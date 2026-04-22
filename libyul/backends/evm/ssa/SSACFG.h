@@ -43,6 +43,7 @@
 namespace solidity::yul::ssa
 {
 class LivenessAnalysis;
+struct ControlFlow;
 
 class SSACFG
 {
@@ -74,7 +75,7 @@ public:
 	};
 	struct Call
 	{
-		std::reference_wrapper<Scope::Function const> function;
+		FunctionGraphID graphID;
 		std::reference_wrapper<FunctionCall const> call;
 		bool canContinue;
 	};
@@ -240,7 +241,8 @@ public:
 	std::string toDot(
 		bool _includeDiGraphDefinition=true,
 		std::optional<size_t> _functionIndex=std::nullopt,
-		LivenessAnalysis const* _liveness=nullptr
+		LivenessAnalysis const* _liveness=nullptr,
+		ControlFlow const* _controlFlow=nullptr
 	) const;
 
 	PhiValue const& phiInfo(ValueId const& _valueId) const

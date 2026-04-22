@@ -56,9 +56,15 @@ namespace
 class StackLayoutDotExporter: public io::DotExporterBase
 {
 public:
-	StackLayoutDotExporter(SSACFG const& _cfg, std::size_t _functionIndex, SSACFGStackLayout const& _layout):
+	StackLayoutDotExporter(
+		SSACFG const& _cfg,
+		std::size_t _functionIndex,
+		SSACFGStackLayout const& _layout,
+		ControlFlow const& _controlFlow
+	):
 		DotExporterBase(_cfg, _functionIndex),
-		m_layout(_layout)
+		m_layout(_layout),
+		m_controlFlow(_controlFlow)
 	{
 	}
 
@@ -83,7 +89,7 @@ protected:
 
 			std::visit(GenericVisitor{
 				[&](SSACFG::Call const& _call) {
-					_out << escapeLabel(_call.function.get().name.str());
+					_out << escapeLabel(m_controlFlow.functionGraph(_call.graphID)->name);
 				},
 				[&](SSACFG::BuiltinCall const& _call) {
 					_out << escapeLabel(_call.builtin.get().name);
@@ -105,6 +111,7 @@ protected:
 
 private:
 	SSACFGStackLayout const& m_layout;
+	ControlFlow const& m_controlFlow;
 };
 
 }
@@ -164,8 +171,8 @@ frontend::test::TestCase::TestResult StackLayoutGeneratorTest::run(std::ostream&
 				gatherCallSites(cfg),
 				static_cast<ControlFlow::FunctionGraphID>(index)
 			);
-			StackLayoutDotExporter exporter(cfg, index, layout);
-			if (cfg.function)
+			StackLayoutDotExporter exporter(cfg, index, layout, *controlFlow);
+			if (!cfg.isMainGraph())
 				m_obtainedResult += exporter.exportFunction(*cfg.function, false);
 			else
 				m_obtainedResult += exporter.exportBlocks(cfg.entry, false);

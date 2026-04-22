@@ -43,6 +43,7 @@
 #include <libyul/backends/evm/ssa/ControlFlow.h>
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
+#include <map>
 #include <stack>
 #include <unordered_map>
 
@@ -109,6 +110,8 @@ private:
 	EVMDialect const& m_dialect;
 	bool const m_generateDebugInfo;
 	std::vector<std::tuple<Scope::Function const*, FunctionDefinition const*>> m_functionDefinitions;
+	/// Translation map from Yul-AST function scopes to their corresponding FunctionGraphIDs
+	std::map<Scope::Function const*, FunctionGraphID> m_functionScopeToID;
 	SSACFG::BlockId m_currentBlock;
 	SSACFG::BasicBlock& currentBlock() { return m_graph.block(m_currentBlock); }
 	langutil::DebugData::ConstPtr currentBlockDebugData() const

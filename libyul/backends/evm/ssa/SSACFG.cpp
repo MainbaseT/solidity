@@ -18,6 +18,7 @@
 
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
+#include <libyul/backends/evm/ssa/ControlFlow.h>
 #include <libyul/backends/evm/ssa/LivenessAnalysis.h>
 #include <libyul/backends/evm/ssa/JunkAdmittingBlocksFinder.h>
 #include <libyul/backends/evm/ssa/io/DotExporterBase.h>
@@ -58,9 +59,10 @@ std::string formatPhi(SSACFG const& _cfg, SSACFG::ValueId _phiId)
 class SSACFGDotExporter: public io::DotExporterBase
 {
 public:
-	SSACFGDotExporter(SSACFG const& _cfg, size_t _functionIndex, LivenessAnalysis const* _liveness):
+	SSACFGDotExporter(SSACFG const& _cfg, size_t _functionIndex, LivenessAnalysis const* _liveness, ControlFlow const* _controlFlow):
 		DotExporterBase(_cfg, _functionIndex),
-		m_liveness(_liveness)
+		m_liveness(_liveness),
+		m_controlFlow(_controlFlow)
 	{
 		if (_liveness)
 			m_junkAdmittingBlocks = std::make_unique<JunkAdmittingBlocksFinder>(_cfg, _liveness->topologicalSort());
@@ -103,10 +105,12 @@ protected:
 		{
 			auto const& operation = m_cfg.operation(opId);
 			std::string const label = std::visit(GenericVisitor{
-				[&](SSACFG::Call const& _call) {
-					return _call.function.get().name.str();
+				[&](SSACFG::Call const& _call) -> std::string {
+					if (m_controlFlow)
+						return m_controlFlow->functionGraph(_call.graphID)->name;
+					return fmt::format("func{}", _call.graphID);
 				},
-				[&](SSACFG::BuiltinCall const& _call) {
+				[&](SSACFG::BuiltinCall const& _call) -> std::string {
 					return _call.builtin.get().name;
 				}
 			}, operation.kind);
@@ -139,6 +143,7 @@ protected:
 
 private:
 	LivenessAnalysis const* m_liveness;
+	ControlFlow const* m_controlFlow;
 	std::unique_ptr<JunkAdmittingBlocksFinder> m_junkAdmittingBlocks;
 };
 
@@ -162,10 +167,11 @@ std::string ValueId::str(SSACFG const& _cfg) const
 std::string SSACFG::toDot(
 	bool _includeDiGraphDefinition,
 	std::optional<size_t> _functionIndex,
-	LivenessAnalysis const* _liveness
+	LivenessAnalysis const* _liveness,
+	ControlFlow const* _controlFlow
 ) const
 {
-	SSACFGDotExporter exporter(*this, _functionIndex.value_or(isMainGraph() ? 0 : 1), _liveness);
+	SSACFGDotExporter exporter(*this, _functionIndex.value_or(isMainGraph() ? 0 : 1), _liveness, _controlFlow);
 	if (!isMainGraph())
 		return exporter.exportFunction(*function, _includeDiGraphDefinition);
 	else

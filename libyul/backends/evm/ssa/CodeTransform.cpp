@@ -53,11 +53,12 @@ void CodeTransform::run
 	yulAssert(controlFlow.functionGraphs.size() == _controlFlowLiveness.cfgLiveness.size());
 	FunctionLabels const functionLabels = registerFunctionLabels(_assembly, controlFlow);
 
-	for (std::size_t functionIndex = 0; functionIndex < controlFlow.functionGraphMapping.size(); ++functionIndex)
+	for (std::size_t functionIndex = 0; functionIndex < controlFlow.functionGraphs.size(); ++functionIndex)
 	{
-		auto const& [function, cfg] = controlFlow.functionGraphMapping[functionIndex];
-		yulAssert(cfg);
-		auto const callSites = gatherCallSites(*cfg);
+		std::unique_ptr<SSACFG> const& functionGraphPtr = controlFlow.functionGraphs[functionIndex];
+		yulAssert(functionGraphPtr);
+		SSACFG const& cfg = *functionGraphPtr;
+		auto const callSites = gatherCallSites(cfg);
 		auto const& liveness = _controlFlowLiveness.cfgLiveness[functionIndex];
 		yulAssert(liveness);
 		auto const graphID = static_cast<ControlFlow::FunctionGraphID>(functionIndex);
@@ -65,14 +66,14 @@ void CodeTransform::run
 		CodeTransform transform(
 			_assembly,
 			_builtinContext,
+			controlFlow,
 			functionLabels,
 			callSites,
-			*cfg,
+			cfg,
 			stackLayout,
-			function,
 			graphID
 		);
-		transform(cfg->entry);
+		transform(cfg.entry);
 	}
 }
 
@@ -80,23 +81,27 @@ CodeTransform::FunctionLabels CodeTransform::registerFunctionLabels(
 	AbstractAssembly& _assembly, ControlFlow const& _controlFlow)
 {
 	FunctionLabels functionLabels;
-	std::set<YulString> assignedFunctionNames;
+	std::set<std::string> assignedFunctionNames;
 
-	for (auto const& [_function, _functionGraph]: _controlFlow.functionGraphMapping)
+	for (std::size_t index = 0; index < _controlFlow.functionGraphs.size(); ++index)
 	{
-		if (!_function)
+		std::unique_ptr<SSACFG> const& functionGraphPtr = _controlFlow.functionGraphs[index];
+		yulAssert(functionGraphPtr);
+		SSACFG const& functionGraph = *functionGraphPtr;
+		if (functionGraph.isMainGraph())
 			continue;
-		bool nameAlreadySeen = !assignedFunctionNames.insert(_function->name).second;
+		auto const graphID = static_cast<ControlFlow::FunctionGraphID>(index);
+		bool const nameAlreadySeen = !assignedFunctionNames.insert(functionGraph.name).second;
 		auto const sourceID = [&]() -> std::optional<std::size_t> {
-			if (_functionGraph->debugInfo && _functionGraph->debugInfo->graphDebugData)
-				return _functionGraph->debugInfo->graphDebugData->astID;
+			if (functionGraph.debugInfo && functionGraph.debugInfo->graphDebugData)
+				return functionGraph.debugInfo->graphDebugData->astID;
 			return std::nullopt;
 		}();
-		functionLabels[_function] = !nameAlreadySeen ?
+		functionLabels[graphID] = !nameAlreadySeen ?
 			_assembly.namedLabel(
-				_function->name.str(),
-				_functionGraph->arguments.size(),
-				_functionGraph->returns.size(),
+				functionGraph.name,
+				functionGraph.arguments.size(),
+				functionGraph.returns.size(),
 				sourceID
 			) :
 			_assembly.newLabelId();
@@ -107,15 +112,16 @@ CodeTransform::FunctionLabels CodeTransform::registerFunctionLabels(
 CodeTransform::CodeTransform(
 	AbstractAssembly& _assembly,
 	BuiltinContext& _builtinContext,
+	ControlFlow const& _controlFlow,
 	FunctionLabels const& _functionLabels,
 	CallSites const& _callSites,
 	SSACFG const& _cfg,
 	SSACFGStackLayout const& _stackLayout,
-	Scope::Function const* _function,
 	ControlFlow::FunctionGraphID _graphID
 ):
 	m_assembly(_assembly),
 	m_builtinContext(_builtinContext),
+	m_controlFlow(_controlFlow),
 	m_functionLabels(_functionLabels),
 	m_callSites(_callSites),
 	m_cfg(_cfg),
@@ -143,17 +149,18 @@ CodeTransform::CodeTransform(
 	}()),
 	m_stack(m_stackData, m_assemblyCallbacks)
 {
-	if (_function)
+	bool const isFunctionGraph = !m_cfg.isMainGraph();
+	if (isFunctionGraph)
 	{
-		auto const findIt = m_functionLabels.find(_function);
+		auto const findIt = m_functionLabels.find(_graphID);
 		yulAssert(findIt != m_functionLabels.end());
 		m_assembly.appendLabel(findIt->second);
-		m_assembly.setStackHeight(static_cast<int>(_function->numArguments) + (m_cfg.canContinue ? 1 : 0));
+		m_assembly.setStackHeight(static_cast<int>(m_cfg.arguments.size()) + (m_cfg.canContinue ? 1 : 0));
 	}
 	StackData expectedStackTop;
-	expectedStackTop.reserve(m_cfg.arguments.size() + (!m_cfg.isMainGraph() && m_cfg.canContinue ? 1 : 0));
-		if (!m_cfg.isMainGraph() && m_cfg.canContinue)
-			expectedStackTop.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
+	expectedStackTop.reserve(m_cfg.arguments.size() + (isFunctionGraph && m_cfg.canContinue ? 1 : 0));
+	if (isFunctionGraph && m_cfg.canContinue)
+		expectedStackTop.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
 	for (auto const& [_, valueID]: m_cfg.arguments | ranges::views::reverse)
 		expectedStackTop.push_back(StackSlot::makeValueID(valueID));
 	assertLayoutCompatibility(m_stack.data(), expectedStackTop);
@@ -266,9 +273,11 @@ void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _oper
 			// check that if we have a return label, the call can continue
 			yulAssert(!!returnLabel == _call.canContinue);
 			m_assembly.setSourceLocation(opOriginLocation);
+			SSACFG const* calleeCFG  = m_controlFlow.functionGraph(_call.graphID);
+			yulAssert(calleeCFG);
 			m_assembly.appendJumpTo(
-				m_functionLabels.at(&_call.function.get()),
-				static_cast<int>(_call.function.get().numReturns - _call.function.get().numArguments) - (_call.canContinue ? 1 : 0),
+				m_functionLabels.at(_call.graphID),
+				static_cast<int>(calleeCFG->numReturns) - static_cast<int>(calleeCFG->arguments.size()) - (_call.canContinue ? 1 : 0),
 				AbstractAssembly::JumpType::IntoFunction
 			);
 			// if we have a return label, append it to assembly and pop the label from the stack

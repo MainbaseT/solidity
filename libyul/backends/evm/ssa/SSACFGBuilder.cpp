@@ -35,6 +35,7 @@
 #include <libsolutil/StringUtils.h>
 #include <libsolutil/Visitor.h>
 
+#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/drop_last.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -78,7 +79,6 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 		_dialect,
 		_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
 	));
-	controlFlow->functionGraphMapping.emplace_back(nullptr, controlFlow->functionGraphs.back().get());
 	SSACFG& mainGraph = *controlFlow->functionGraphs.back();
 	SSACFGBuilder builder(*controlFlow, mainGraph, _analysisInfo, sideEffects, _dialect, _generateDebugInfo);
 	builder.m_currentBlock = mainGraph.makeBlock(debugDataOf(_block));
@@ -98,12 +98,11 @@ void SSACFGBuilder::buildFunctionGraph(
 	FunctionDefinition const* _functionDefinition
 )
 {
-	m_controlFlow.functionGraphs.emplace_back(std::make_unique<SSACFG>(
-		m_dialect,
-		m_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
-	));
-	auto& cfg = *m_controlFlow.functionGraphs.back();
-	m_controlFlow.functionGraphMapping.emplace_back(_function, &cfg);
+	// The graph slot and the FunctionGraphID have already been allocated in
+	// `registerFunctionDefinition`; this call builds the body into that slot.
+	auto const graphIt = m_functionScopeToID.find(_function);
+	yulAssert(graphIt != m_functionScopeToID.end(), "Function graph must be registered before building.");
+	auto& cfg = *m_controlFlow.functionGraphs[graphIt->second];
 
 	yulAssert(m_info.scopes.at(&_functionDefinition->body), "");
 	Scope* virtualFunctionScope = m_info.scopes.at(m_info.virtualBlocks.at(_functionDefinition).get()).get();
@@ -122,7 +121,6 @@ void SSACFGBuilder::buildFunctionGraph(
 	if (cfg.debugInfo)
 		cfg.debugInfo->graphDebugData = _functionDefinition->debugData;
 	cfg.function = _function;
-	cfg.name = _function->name.str();
 	cfg.canContinue = m_sideEffects.functionSideEffects().at(_functionDefinition).canContinue;
 	cfg.arguments = arguments;
 	cfg.returns = returns;
@@ -130,6 +128,7 @@ void SSACFGBuilder::buildFunctionGraph(
 	SSACFGBuilder builder(m_controlFlow, cfg, m_info, m_sideEffects, m_dialect, m_generateDebugInfo);
 	builder.m_currentBlock = cfg.entry;
 	builder.m_functionDefinitions = m_functionDefinitions;
+	builder.m_functionScopeToID = m_functionScopeToID;
 	for (auto&& [var, varId]: cfg.arguments)
 		builder.currentDef(var, cfg.entry) = varId;
 	for (auto const& var: cfg.returns)
@@ -382,6 +381,17 @@ void SSACFGBuilder::registerFunctionDefinition(FunctionDefinition const& _functi
 	auto& function = std::get<Scope::Function>(m_scope->identifiers.at(_functionDefinition.name));
 	m_graph.functions.emplace_back(function);
 	m_functionDefinitions.emplace_back(&function, &_functionDefinition);
+
+	// Allocate the graph slot up front so sibling functions (and mutually-recursive pairs) can
+	// reference this function by its FunctionGraphID when their bodies are built later.
+	m_controlFlow.functionGraphs.emplace_back(std::make_unique<SSACFG>(
+		m_dialect,
+		m_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
+	));
+	auto const graphID = static_cast<FunctionGraphID>(m_controlFlow.functionGraphs.size() - 1);
+	auto& cfg = *m_controlFlow.functionGraphs.back();
+	cfg.name = function.name.str();
+	m_functionScopeToID[&function] = graphID;
 }
 
 void SSACFGBuilder::operator()(Block const& _block)
@@ -457,7 +467,9 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 			auto const* definition = findFunctionDefinition(&function);
 			yulAssert(definition);
 			canContinue = m_sideEffects.functionSideEffects().at(definition).canContinue;
-			SSACFG::Operation result{{}, SSACFG::Call{function, _call, canContinue}, {}};
+			auto const calleeIt = m_functionScopeToID.find(&function);
+			yulAssert(calleeIt != m_functionScopeToID.end(), "Called function has no registered graph id.");
+			SSACFG::Operation result{{}, SSACFG::Call{calleeIt->second, _call, canContinue}, {}};
 			for (auto const& arg: _call.arguments | ranges::views::reverse)
 				result.inputs.emplace_back(std::visit(*this, arg));
 			for (size_t i = 0; i < function.numReturns; ++i)

@@ -22,9 +22,6 @@
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
 #include <libyul/AST.h>
-#include <libyul/Scope.h>
-
-#include <range/v3/algorithm/find_if.hpp>
 
 namespace solidity::yul::ssa
 {
@@ -48,14 +45,6 @@ struct ControlFlow
 
 	SSACFG const* mainGraph() const { return functionGraph(mainGraphID()); }
 
-	SSACFG const* functionGraph(Scope::Function const* _function) const
-	{
-		auto it = ranges::find_if(functionGraphMapping, [_function](auto const& tup) { return _function == std::get<0>(tup); });
-		if (it != functionGraphMapping.end())
-			return std::get<1>(*it);
-		return nullptr;
-	}
-
 	SSACFG const* functionGraph(FunctionGraphID const _id) const
 	{
 		return functionGraphs.at(_id).get();
@@ -72,7 +61,8 @@ struct ControlFlow
 			output << functionGraphs[index]->toDot(
 				false,
 				index,
-				_liveness ? _liveness->cfgLiveness[index].get() : nullptr
+				_liveness ? _liveness->cfgLiveness[index].get() : nullptr,
+				this
 			);
 
 		output << "}\n";
@@ -80,7 +70,6 @@ struct ControlFlow
 	}
 
 	std::vector<std::unique_ptr<SSACFG>> functionGraphs{};
-	std::vector<std::tuple<Scope::Function const*, SSACFG const*>> functionGraphMapping{};
 };
 
 }

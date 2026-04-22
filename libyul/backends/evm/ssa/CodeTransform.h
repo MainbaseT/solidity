@@ -100,7 +100,7 @@ public:
 	);
 
 private:
-	using FunctionLabels = std::map<Scope::Function const*, AbstractAssembly::LabelID>;
+	using FunctionLabels = std::map<ControlFlow::FunctionGraphID, AbstractAssembly::LabelID>;
 
 	static FunctionLabels registerFunctionLabels(
 		AbstractAssembly& _assembly,
@@ -110,11 +110,11 @@ private:
 	CodeTransform(
 		AbstractAssembly& _assembly,
 		BuiltinContext& _builtinContext,
+		ControlFlow const& _controlFlow,
 		FunctionLabels const& _functionLabels,
 		CallSites const& _callSites,
 		SSACFG const& _cfg,
 		SSACFGStackLayout const& _stackLayout,
-		Scope::Function const* _function,
 		ControlFlow::FunctionGraphID _graphID);
 
 	void operator()(SSACFG::BlockId _blockId);
@@ -129,6 +129,7 @@ private:
 
 	AbstractAssembly& m_assembly;
 	BuiltinContext& m_builtinContext;
+	ControlFlow const& m_controlFlow;
 	FunctionLabels const& m_functionLabels;
 	CallSites const& m_callSites;
 	SSACFG const& m_cfg;
