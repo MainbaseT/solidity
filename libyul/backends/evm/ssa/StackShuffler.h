@@ -580,6 +580,21 @@ private:
 					}
 				}
 			}
+			// If there were no other swapping opportunities, try fixing at least the top before we start pushing
+			// more stuff on stack
+			if (!_state.isArgsCompatible(stackTop, stackTop))
+				for (StackOffset offset: _state.stackArgsRange())
+					if (
+						offset != stackTop &&
+						_stack[offset] != _stack[stackTop] &&  // don't swap identical values (no-op)
+						_stack.isValidSwapTarget(offset) &&
+						!_state.isArgsCompatible(offset, offset) &&
+						_state.isArgsCompatible(offset, stackTop)
+					)
+					{
+						_stack.swap(offset);
+						return {ShuffleHelperResult::Status::StackModified};
+					}
 		}
 
 		// dup up whatever is missing
