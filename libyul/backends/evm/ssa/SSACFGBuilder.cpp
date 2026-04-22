@@ -109,29 +109,30 @@ void SSACFGBuilder::buildFunctionGraph(
 	yulAssert(virtualFunctionScope, "");
 
 	cfg.entry = cfg.makeBlock(debugDataOf(_functionDefinition->body));
-	auto arguments = _functionDefinition->parameters | ranges::views::transform([&](auto const& _param) {
+	auto argumentBindings = _functionDefinition->parameters | ranges::views::transform([&](auto const& _param) {
 		auto const& var = std::get<Scope::Variable>(virtualFunctionScope->identifiers.at(_param.name));
 		// Note: cannot use std::make_tuple since it unwraps reference wrappers.
 		return std::tuple{std::cref(var), cfg.newVariable(cfg.entry)};
 	}) | ranges::to<std::vector>;
-	auto returns = _functionDefinition->returnVariables | ranges::views::transform([&](auto const& _param) {
+	auto returnVars = _functionDefinition->returnVariables | ranges::views::transform([&](auto const& _param) {
 		return std::cref(std::get<Scope::Variable>(virtualFunctionScope->identifiers.at(_param.name)));
-	}) | ranges::to<std::vector>;
+	}) | ranges::to<std::vector<std::reference_wrapper<Scope::Variable const>>>();
 
 	if (cfg.debugInfo)
 		cfg.debugInfo->graphDebugData = _functionDefinition->debugData;
-	cfg.function = _function;
 	cfg.canContinue = m_sideEffects.functionSideEffects().at(_functionDefinition).canContinue;
-	cfg.arguments = arguments;
-	cfg.returns = returns;
+	cfg.arguments = argumentBindings
+		| ranges::views::transform([](auto const& _binding) { return std::get<1>(_binding); })
+		| ranges::to<std::vector>;
 
 	SSACFGBuilder builder(m_controlFlow, cfg, m_info, m_sideEffects, m_dialect, m_generateDebugInfo);
 	builder.m_currentBlock = cfg.entry;
 	builder.m_functionDefinitions = m_functionDefinitions;
 	builder.m_functionScopeToID = m_functionScopeToID;
-	for (auto&& [var, varId]: cfg.arguments)
+	builder.m_currentReturnVars = returnVars;
+	for (auto&& [var, varId]: argumentBindings)
 		builder.currentDef(var, cfg.entry) = varId;
-	for (auto const& var: cfg.returns)
+	for (auto const& var: returnVars)
 		builder.currentDef(var.get(), cfg.entry) = builder.zero();
 	builder.sealBlock(cfg.entry);
 	builder(_functionDefinition->body);
@@ -366,7 +367,7 @@ void SSACFGBuilder::operator()(Leave const& _leaveStatement)
 	if (m_graph.debugInfo)
 		m_graph.debugInfo->setExitDebugData(m_currentBlock, debugDataOf(_leaveStatement));
 	currentBlock().exit = SSACFG::BasicBlock::FunctionReturn{
-		m_graph.returns | ranges::views::transform([&](auto _var) {
+		m_currentReturnVars | ranges::views::transform([&](auto _var) {
 			return readVariable(_var, m_currentBlock);
 		}) | ranges::to<std::vector>
 	};
@@ -390,6 +391,7 @@ void SSACFGBuilder::registerFunctionDefinition(FunctionDefinition const& _functi
 	auto const graphID = static_cast<FunctionGraphID>(m_controlFlow.functionGraphs.size() - 1);
 	auto& cfg = *m_controlFlow.functionGraphs.back();
 	cfg.name = function.name.str();
+	cfg.numReturns = _functionDefinition.returnVariables.size();
 	m_functionScopeToID[&function] = graphID;
 }
 

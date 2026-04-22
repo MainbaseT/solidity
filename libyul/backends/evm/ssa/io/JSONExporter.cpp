@@ -177,9 +177,9 @@ Json exportFunction(SSACFG const& _cfg, LivenessAnalysis const* _liveness, Contr
 	Json functionJson = Json::object();
 	functionJson["type"] = "Function";
 	functionJson["entry"] = "Block" + std::to_string(_cfg.entry.value);
-	static auto constexpr argsTransform = [](auto const& _arg) { return fmt::format("v{}", std::get<1>(_arg).value()); };
+	static auto constexpr argsTransform = [](auto const& _arg) { return fmt::format("v{}", _arg.value()); };
 	functionJson["arguments"] = _cfg.arguments | ranges::views::transform(argsTransform) | ranges::to<std::vector>;
-	functionJson["numReturns"] = _cfg.returns.size();
+	functionJson["numReturns"] = _cfg.numReturns;
 	functionJson["blocks"] = exportBlock(_cfg, _cfg.entry, _liveness, _controlFlow);
 	return functionJson;
 }

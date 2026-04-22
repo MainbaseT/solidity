@@ -173,7 +173,7 @@ frontend::test::TestCase::TestResult StackLayoutGeneratorTest::run(std::ostream&
 			);
 			StackLayoutDotExporter exporter(cfg, index, layout, *controlFlow);
 			if (!cfg.isMainGraph())
-				m_obtainedResult += exporter.exportFunction(*cfg.function, false);
+				m_obtainedResult += exporter.exportFunction(cfg, false);
 			else
 				m_obtainedResult += exporter.exportBlocks(cfg.entry, false);
 		}

@@ -149,7 +149,7 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 			blockLayout.stackIn.reserve(m_cfg.arguments.size() + (m_hasFunctionReturnLabel ? 1u : 0u));
 			if (m_hasFunctionReturnLabel)
 				blockLayout.stackIn.push_back(Slot::makeFunctionReturnLabel(m_graphID));
-			for (auto const& [_, valueID]: m_cfg.arguments | ranges::views::reverse)
+			for (auto const& valueID: m_cfg.arguments | ranges::views::reverse)
 				blockLayout.stackIn.push_back(Slot::makeValueID(valueID));
 		}
 		m_resultLayout[_blockId] = blockLayout;

@@ -59,7 +59,7 @@
 // Block0_0Exit [label="MainExit"];
 // Block0_0 -> Block0_0Exit;
 // FunctionEntry_f_0 [label="function f:
-//  c := f(v0, v1)"];
+//  [1 returns] := f(v0, v1)"];
 // FunctionEntry_f_0 -> Block1_0;
 // Block1_0 [label="\
 // Block 0; (0, max 17)\nLiveIn: v1[1], v0[1]\l\

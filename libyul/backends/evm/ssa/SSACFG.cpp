@@ -173,7 +173,7 @@ std::string SSACFG::toDot(
 {
 	SSACFGDotExporter exporter(*this, _functionIndex.value_or(isMainGraph() ? 0 : 1), _liveness, _controlFlow);
 	if (!isMainGraph())
-		return exporter.exportFunction(*function, _includeDiGraphDefinition);
+		return exporter.exportFunction(*this, _includeDiGraphDefinition);
 	else
 		return exporter.exportBlocks(entry, _includeDiGraphDefinition);
 }

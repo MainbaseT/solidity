@@ -112,6 +112,8 @@ private:
 	std::vector<std::tuple<Scope::Function const*, FunctionDefinition const*>> m_functionDefinitions;
 	/// Translation map from Yul-AST function scopes to their corresponding FunctionGraphIDs
 	std::map<Scope::Function const*, FunctionGraphID> m_functionScopeToID;
+	/// Return variable scopes of the function currently being built
+	std::vector<std::reference_wrapper<Scope::Variable const>> m_currentReturnVars;
 	SSACFG::BlockId m_currentBlock;
 	SSACFG::BasicBlock& currentBlock() { return m_graph.block(m_currentBlock); }
 	langutil::DebugData::ConstPtr currentBlockDebugData() const

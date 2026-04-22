@@ -101,7 +101,7 @@ CodeTransform::FunctionLabels CodeTransform::registerFunctionLabels(
 			_assembly.namedLabel(
 				functionGraph.name,
 				functionGraph.arguments.size(),
-				functionGraph.returns.size(),
+				functionGraph.numReturns,
 				sourceID
 			) :
 			_assembly.newLabelId();
@@ -161,7 +161,7 @@ CodeTransform::CodeTransform(
 	expectedStackTop.reserve(m_cfg.arguments.size() + (isFunctionGraph && m_cfg.canContinue ? 1 : 0));
 	if (isFunctionGraph && m_cfg.canContinue)
 		expectedStackTop.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
-	for (auto const& [_, valueID]: m_cfg.arguments | ranges::views::reverse)
+	for (auto const& valueID: m_cfg.arguments | ranges::views::reverse)
 		expectedStackTop.push_back(StackSlot::makeValueID(valueID));
 	assertLayoutCompatibility(m_stack.data(), expectedStackTop);
 }
@@ -367,7 +367,7 @@ void CodeTransform::operator()(SSACFG::BlockId const&, SSACFG::BasicBlock::Funct
 {
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
 	// Each CodeTransform instance handles exactly one function's CFG, so a FunctionReturn exit
-	// here necessarily belongs to m_cfg.function. No identity cross-check is needed.
+	// here necessarily belongs to a function graph. No identity cross-check is needed.
 	yulAssert(!m_cfg.isMainGraph());
 	yulAssert(m_cfg.canContinue);
 	yulAssert(m_stack.size() == _functionReturn.returnValues.size() + 1, "There must be at least the function return label element on stack");

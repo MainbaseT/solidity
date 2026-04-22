@@ -30,7 +30,6 @@
 #include <libyul/AsmAnalysisInfo.h>
 #include <libyul/Dialect.h>
 #include <libyul/Exceptions.h>
-#include <libyul/Scope.h>
 
 #include <libsolutil/Numeric.h>
 
@@ -38,6 +37,7 @@
 #include <deque>
 #include <functional>
 #include <list>
+#include <string>
 #include <vector>
 
 namespace solidity::yul::ssa
@@ -279,8 +279,8 @@ public:
 	std::set<BlockId> exits;
 	std::string name{};
 	bool canContinue = true;
-	std::vector<std::tuple<std::reference_wrapper<Scope::Variable const>, ValueId>> arguments;
-	std::vector<std::reference_wrapper<Scope::Variable const>> returns;
+	std::vector<ValueId> arguments;
+	std::size_t numReturns = 0;
 	// Container for artificial calls generated for switch statements.
 	std::list<FunctionCall> ghostCalls;
 
