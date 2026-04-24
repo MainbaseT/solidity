@@ -66,9 +66,9 @@ struct AssemblyCallbacks
 		}
 		case StackSlot::Kind::FunctionCallReturnLabel:
 		{
-			auto const& call = callSites->functionCall(_slot.functionCallReturnLabel());
-			yulAssert(returnLabels->count(&call), "FunctionCallReturnLabel not pre-registered before shuffle.");
-			assembly->appendLabelReference(returnLabels->at(&call));
+			auto const opId = callSites->operationId(_slot.functionCallReturnLabel());
+			yulAssert(returnLabels->count(opId), "FunctionCallReturnLabel not pre-registered before shuffle.");
+			assembly->appendLabelReference(returnLabels->at(opId));
 			return;
 		}
 		case StackSlot::Kind::FunctionReturnLabel:
@@ -86,7 +86,7 @@ struct AssemblyCallbacks
 	SSACFG const* cfg{};
 	AbstractAssembly* assembly{};
 	CallSites const* callSites{};
-	std::map<FunctionCall const*, AbstractAssembly::LabelID> const* returnLabels{};
+	std::map<SSACFG::OperationId, AbstractAssembly::LabelID> const* returnLabels{};
 };
 static_assert(StackManipulationCallbackConcept<AssemblyCallbacks>);
 
@@ -141,7 +141,7 @@ private:
 	AssemblyCallbacks m_assemblyCallbacks;
 	StackData m_stackData;
 	Stack<AssemblyCallbacks> m_stack;
-	std::map<FunctionCall const*, AbstractAssembly::LabelID> m_returnLabels;
+	std::map<SSACFG::OperationId, AbstractAssembly::LabelID> m_returnLabels;
 };
 
 }

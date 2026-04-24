@@ -239,7 +239,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 		if (auto const* call = std::get_if<SSACFG::Call>(&operation.kind))
 			if (call->canContinue)
 			{
-				auto const callSiteID = m_callSites.callSiteID(&call->call.get());
+				auto const callSiteID = m_callSites.callSiteID(block.operations[operationIndex]);
 				yulAssert(callSiteID.has_value());
 				requiredStackTop.emplace_back(Slot::makeFunctionCallReturnLabel(*callSiteID));
 			}

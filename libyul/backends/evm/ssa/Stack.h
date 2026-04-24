@@ -27,46 +27,41 @@
 #include <cstdint>
 #include <type_traits>
 
-namespace solidity::yul
-{
-
-struct FunctionCall;
-
-namespace ssa
+namespace solidity::yul::ssa
 {
 
 /// Registry for tracking function call sites.
 ///
-/// Maps FunctionCall AST nodes to unique numeric IDs. These IDs are used
+/// Maps user-function-call operations to unique numeric IDs. These IDs are used
 /// to generate return labels for function calls in the EVM bytecode.
 class CallSites
 {
 public:
 	using CallSiteID = std::uint32_t;
 
-	std::optional<CallSiteID> callSiteID(FunctionCall const* _functionCall) const
+	std::optional<CallSiteID> callSiteID(OperationId _op) const
 	{
-		if (auto const it = ranges::find(m_data, _functionCall); it != m_data.end())
+		if (auto const it = ranges::find(m_data, _op); it != m_data.end())
 			return static_cast<CallSiteID>(std::distance(m_data.begin(), it));
 		return std::nullopt;
 	}
 
-	FunctionCall const& functionCall(CallSiteID _callSite) const
+	OperationId operationId(CallSiteID _callSite) const
 	{
 		yulAssert(_callSite < m_data.size());
-		return *m_data[_callSite];
+		return m_data[_callSite];
 	}
 
-	CallSiteID addCallSite(FunctionCall const* _functionCall)
+	CallSiteID addCallSite(OperationId _op)
 	{
-		if (auto const id = callSiteID(_functionCall))
+		if (auto const id = callSiteID(_op))
 			return *id;
-		yulAssert(_functionCall);
-		m_data.emplace_back(_functionCall);
+		yulAssert(_op.hasValue());
+		m_data.emplace_back(_op);
 		return static_cast<CallSiteID>(m_data.size() - 1);
 	}
 private:
-	std::vector<FunctionCall const*> m_data;
+	std::vector<OperationId> m_data;
 };
 
 /// A discriminated union corresponding to a single EVM stack slot.
@@ -308,5 +303,4 @@ private:
 	Callbacks m_callbacks;
 };
 
-}
 }
