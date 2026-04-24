@@ -34,9 +34,6 @@
 #include <libsolutil/Numeric.h>
 
 #include <concepts>
-#include <deque>
-#include <functional>
-#include <list>
 #include <string>
 #include <vector>
 
@@ -70,13 +67,13 @@ public:
 
 	struct BuiltinCall
 	{
-		std::reference_wrapper<BuiltinFunction const> builtin;
-		std::reference_wrapper<FunctionCall const> call;
+		BuiltinHandle builtin;
+		/// Literal-kind arguments
+		std::vector<Literal> literalArguments;
 	};
 	struct Call
 	{
 		FunctionGraphID graphID;
-		std::reference_wrapper<FunctionCall const> call;
 		bool canContinue;
 	};
 
@@ -281,8 +278,6 @@ public:
 	bool canContinue = true;
 	std::vector<ValueId> arguments;
 	std::size_t numReturns = 0;
-	// Container for artificial calls generated for switch statements.
-	std::list<FunctionCall> ghostCalls;
 
 	bool isMainGraph() const { return name.empty(); }
 };

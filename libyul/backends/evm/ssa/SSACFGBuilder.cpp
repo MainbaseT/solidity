@@ -234,18 +234,10 @@ void SSACFGBuilder::operator()(Switch const& _switch)
 	yulAssert(equalityBuiltinHandle);
 
 	auto makeValueCompare = [&](Case const& _case) {
-		FunctionCall const& ghostCall = m_graph.ghostCalls.emplace_back(FunctionCall{
-			debugDataOf(_case),
-			BuiltinName{{}, *equalityBuiltinHandle},
-			{*_case.value /* skip second argument */ }
-		});
 		auto outputValue = m_graph.newVariable(m_currentBlock);
 		auto opId = m_graph.makeOperation(SSACFG::Operation{
 			{outputValue},
-			SSACFG::BuiltinCall{
-				m_dialect.builtin(*equalityBuiltinHandle),
-				ghostCall
-			},
+			SSACFG::BuiltinCall{*equalityBuiltinHandle, {}},
 			{m_graph.newLiteral(debugDataOf(_case), _case.value->value.value()), expression}
 		}, debugDataOf(_case));
 		currentBlock().operations.emplace_back(opId);
@@ -452,7 +444,15 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 		[&](BuiltinName const& _builtinName)
 		{
 			auto const& builtin = m_dialect.builtin(_builtinName.handle);
-			SSACFG::Operation result{{}, SSACFG::BuiltinCall{builtin, _call}, {}};
+			yulAssert(_call.arguments.size() == builtin.numParameters);
+			std::vector<Literal> literalArguments;
+			for (auto&& [kind, arg]: ranges::views::zip(builtin.literalArguments, _call.arguments))
+				if (kind.has_value())
+				{
+					yulAssert(std::holds_alternative<Literal>(arg));
+					literalArguments.emplace_back(std::get<Literal>(arg));
+				}
+			SSACFG::Operation result{{}, SSACFG::BuiltinCall{_builtinName.handle, std::move(literalArguments)}, {}};
 			for (auto&& [idx, arg]: _call.arguments | ranges::views::enumerate | ranges::views::reverse)
 				if (!builtin.literalArgument(idx).has_value())
 					result.inputs.emplace_back(std::visit(*this, arg));
@@ -470,7 +470,7 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 			canContinue = m_sideEffects.functionSideEffects().at(definition).canContinue;
 			auto const calleeIt = m_functionScopeToID.find(&function);
 			yulAssert(calleeIt != m_functionScopeToID.end(), "Called function has no registered graph id.");
-			SSACFG::Operation result{{}, SSACFG::Call{calleeIt->second, _call, canContinue}, {}};
+			SSACFG::Operation result{{}, SSACFG::Call{calleeIt->second, canContinue}, {}};
 			for (auto const& arg: _call.arguments | ranges::views::reverse)
 				result.inputs.emplace_back(std::visit(*this, arg));
 			for (size_t i = 0; i < function.numReturns; ++i)

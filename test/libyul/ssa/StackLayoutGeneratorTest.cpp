@@ -92,7 +92,7 @@ protected:
 					_out << escapeLabel(m_controlFlow.functionGraph(_call.graphID)->name);
 				},
 				[&](SSACFG::BuiltinCall const& _call) {
-					_out << escapeLabel(_call.builtin.get().name);
+					_out << escapeLabel(m_cfg.evmDialect.builtin(_call.builtin).name);
 				}
 			}, operation.kind);
 			_out << "\\l\\\n";

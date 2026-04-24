@@ -111,7 +111,7 @@ protected:
 					return fmt::format("func{}", _call.graphID);
 				},
 				[&](SSACFG::BuiltinCall const& _call) -> std::string {
-					return _call.builtin.get().name;
+					return m_cfg.evmDialect.builtin(_call.builtin).name;
 				}
 			}, operation.kind);
 			if (!operation.outputs.empty())

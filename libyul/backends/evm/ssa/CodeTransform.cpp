@@ -208,7 +208,7 @@ void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _oper
 
 	if (hasReturnLabel)
 	{
-		auto const [it, inserted] = m_returnLabels.try_emplace(&std::get<SSACFG::Call>(_operation.kind).call.get(), 0);
+		auto const [it, inserted] = m_returnLabels.try_emplace(_opId, 0);
 		yulAssert(inserted, "Call sites should be unique.");
 		it->second = m_assembly.newLabelId();
 	}
@@ -244,7 +244,7 @@ void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _oper
 		yulAssert(std::holds_alternative<SSACFG::Call>(_operation.kind));
 		yulAssert(
 			returnLabelSlot.isFunctionCallReturnLabel() &&
-			&m_callSites.functionCall(returnLabelSlot.functionCallReturnLabel()) == &std::get<SSACFG::Call>(_operation.kind).call.get()
+			m_callSites.operationId(returnLabelSlot.functionCallReturnLabel()) == _opId
 		);
 	}
 
@@ -262,14 +262,21 @@ void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _oper
 	std::visit(util::GenericVisitor{
 		[&](SSACFG::BuiltinCall const& _builtin) {
 			m_assembly.setSourceLocation(opOriginLocation);
-			static_cast<BuiltinFunctionForEVM const&>(_builtin.builtin.get()).generateCode(
-				_builtin.call,
-				m_assembly,
-				m_builtinContext
-			);
+			auto const& builtin = m_cfg.evmDialect.builtin(_builtin.builtin);
+			// build up the call with transient args to handle literal arguments as needed
+			std::vector<Expression> transientArgs;
+			transientArgs.reserve(builtin.literalArguments.size());
+			auto litIt = _builtin.literalArguments.begin();
+			for (size_t i = 0; i < builtin.literalArguments.size(); ++i)
+				if (builtin.literalArgument(i).has_value())
+					transientArgs.emplace_back(*litIt++);
+				else
+					transientArgs.emplace_back(Identifier{});
+			FunctionCall const transient{{}, BuiltinName{{}, _builtin.builtin}, std::move(transientArgs)};
+			builtin.generateCode(transient, m_assembly, m_builtinContext);
 		},
 		[&](SSACFG::Call const& _call) {
-			auto const* returnLabel = util::valueOrNullptr(m_returnLabels, &_call.call.get());
+			auto const* returnLabel = util::valueOrNullptr(m_returnLabels, _opId);
 			// check that if we have a return label, the call can continue
 			yulAssert(!!returnLabel == _call.canContinue);
 			m_assembly.setSourceLocation(opOriginLocation);
@@ -388,8 +395,8 @@ void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlo
 	auto const& block = m_cfg.block(_blockId);
 	yulAssert(!block.operations.empty(), "Terminated block must have at least one operation.");
 	std::visit(util::GenericVisitor{
-		[](SSACFG::BuiltinCall const& _builtin) {
-			yulAssert(_builtin.builtin.get().controlFlowSideEffects.terminatesOrReverts(), "Last operation of Terminated block must terminate or revert.");
+		[&](SSACFG::BuiltinCall const& _builtin) {
+			yulAssert(m_cfg.evmDialect.builtin(_builtin.builtin).controlFlowSideEffects.terminatesOrReverts(), "Last operation of Terminated block must terminate or revert.");
 		},
 		[](SSACFG::Call const& _call) {
 			yulAssert(!_call.canContinue, "Last operation of Terminated block must be a non-continuable call.");

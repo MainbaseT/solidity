@@ -54,26 +54,13 @@ Json toJson(Json& _ret, SSACFG const& _cfg, SSACFG::Operation const& _operation,
 		[&](SSACFG::BuiltinCall const& _call) {
 			_ret["type"] = "BuiltinCall";
 			Json builtinArgsJson = Json::array();
-			auto const& builtin = _call.builtin.get();
-			if (!builtin.literalArguments.empty())
-			{
-				auto const& functionCallArgs = _call.call.get().arguments;
-				for (size_t i = 0; i < builtin.literalArguments.size(); ++i)
-				{
-					std::optional<LiteralKind> const& argument = builtin.literalArguments[i];
-					if (argument.has_value() && i < functionCallArgs.size())
-					{
-						// The function call argument at index i must be a literal if builtin.literalArguments[i] is not nullopt
-						yulAssert(std::holds_alternative<Literal>(functionCallArgs[i]));
-						builtinArgsJson.push_back(formatLiteral(std::get<Literal>(functionCallArgs[i])));
-					}
-				}
-			}
+			for (auto const& literal: _call.literalArguments)
+				builtinArgsJson.push_back(formatLiteral(literal));
 
 			if (!builtinArgsJson.empty())
 				opJson["literalArgs"] = builtinArgsJson;
 
-			opJson["op"] = _call.builtin.get().name;
+			opJson["op"] = _cfg.evmDialect.builtin(_call.builtin).name;
 		},
 	}, _operation.kind);
 
