@@ -34,8 +34,8 @@ namespace solidity::yul::ssa
 class LivenessAnalysis
 {
 public:
-	/// Per-program-point liveness: each value's use count is the total number
-	/// of times the value will be read along all paths downstream of that point.
+	/// Per-program-point liveness, each value's use count is the max number of times the value will be read along
+	/// all paths downstream of that point
 	using LivenessData = util::UseCountSet<SSACFG::ValueId>;
 
 	explicit LivenessAnalysis(SSACFG const& _cfg);

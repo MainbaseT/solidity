@@ -20,6 +20,7 @@
 
 #include <libyul/backends/evm/ssa/PhiInverse.h>
 #include <libyul/backends/evm/ssa/Stack.h>
+#include <libyul/backends/evm/ssa/StackSlotLiveness.h>
 
 #include <string>
 #include <vector>
@@ -65,7 +66,7 @@ StackData stackPreImage(StackData _stack, PhiInverse const& _phiInverse);
 std::size_t findOptimalTargetSize(
 	StackData const& _stackData,
 	StackData const& _targetArgs,
-	LivenessAnalysis::LivenessData const& _targetLiveOut,
+	StackSlotLiveness const& _targetLiveOut,
 	bool _canIntroduceJunk,
 	bool _hasFunctionReturnLabel
 );

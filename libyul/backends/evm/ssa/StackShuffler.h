@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include <libyul/backends/evm/ssa/LivenessAnalysis.h>
+#include <libyul/backends/evm/ssa/StackSlotLiveness.h>
 #include <libyul/backends/evm/ssa/StackToMemorySpilling.h>
 #include <libyul/backends/evm/ssa/Stack.h>
 
@@ -54,13 +54,13 @@ struct Target
 {
 	Target(
 		StackData const& _args,
-		LivenessAnalysis::LivenessData const& _liveOut,
+		StackSlotLiveness const& _liveOut,
 		std::size_t _targetSize,
 		SpilledVariables const* _spilledVariables = nullptr
 	);
 
 	StackData const& args;
-	LivenessAnalysis::LivenessData const& liveOut;
+	StackSlotLiveness const& liveOut;
 	SpilledVariables const* const spilledVariables;
 	std::size_t const size;
 	std::size_t const tailSize;
@@ -184,7 +184,7 @@ public:
 	[[nodiscard]] static StackShufflerResult shuffle(
 		Stack<Callback>& _stack,
 		StackData const& _args,
-		LivenessAnalysis::LivenessData const& _liveOut,
+		StackSlotLiveness const& _liveOut,
 		std::size_t _targetStackSize,
 		SpilledVariables const* const _spilledVariables = nullptr
 	)
@@ -197,10 +197,10 @@ public:
 		{
 			// check that all required values are on stack
 			detail::State const state(_stack.data(), target, _spilledVariables, ReachableStackDepth);
-			for (auto const& liveVariable: _liveOut | ranges::views::keys | ranges::views::transform(Slot::makeValueID))
+			for (auto const& liveSlot: _liveOut | ranges::views::keys)
 				yulAssert(
-					!_stack.canBeFreelyGenerated(liveVariable) &&
-					(ranges::contains(_stack.data(), liveVariable) || detail::slotIsSpilled(liveVariable, _spilledVariables))
+					!_stack.canBeFreelyGenerated(liveSlot) &&
+					(ranges::contains(_stack.data(), liveSlot) || detail::slotIsSpilled(liveSlot, _spilledVariables))
 				);
 			for (auto const& arg: _args)
 				yulAssert(detail::slotCanBeLoadedOrPushed(arg, _spilledVariables) || ranges::contains(_stack.data(), arg));
@@ -346,8 +346,8 @@ private:
 			int currentCount = static_cast<int>(_state.count(slot));
 
 			int liveOutCount = 0;
-			if (slot.isValueID() && _state.target().liveOut.contains(slot.valueID()))
-				liveOutCount = static_cast<int>(_state.target().liveOut.count(slot.valueID()));
+			if (slot.isValueID() && _state.target().liveOut.contains(slot))
+				liveOutCount = static_cast<int>(_state.target().liveOut.count(slot));
 			int deficit = liveOutCount - currentCount;
 
 			// Update best if this deficit is higher

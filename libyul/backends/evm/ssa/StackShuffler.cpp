@@ -26,7 +26,7 @@ using namespace solidity::yul::ssa::detail;
 
 Target::Target(
 	StackData const& _args,
-	LivenessAnalysis::LivenessData const& _liveOut,
+	StackSlotLiveness const& _liveOut,
 	std::size_t const _targetSize,
 	SpilledVariables const* _spilledVariables
 ):
@@ -40,9 +40,9 @@ Target::Target(
 	for (auto const& arg: _args)
 		if (!arg.isJunk() && !slotIsSpilled(arg, _spilledVariables))
 			++minCount[arg];
-	for (auto const& liveValueId: _liveOut | ranges::views::keys)
-		if (!(_spilledVariables && _spilledVariables->isSpilled(liveValueId)))
-			++minCount[StackSlot::makeValueID(liveValueId)];
+	for (auto const& liveSlot: _liveOut | ranges::views::keys)
+		if (!slotIsSpilled(liveSlot, _spilledVariables))
+			++minCount[liveSlot];
 }
 
 State::State(StackData const& _stackData, Target const& _target, SpilledVariables const* const _spilledVariables, std::size_t const _reachableStackDepth):
@@ -133,7 +133,7 @@ bool State::requiredInArgs(StackSlot const& _slot) const
 
 bool State::requiredInTail(StackSlot const& _slot) const
 {
-	if (!_slot.isValueID() || !m_target.liveOut.contains(_slot.valueID()))
+	if (!_slot.isValueID() || !m_target.liveOut.contains(_slot))
 		return false;
 	// Spilled values can be rematerialized, so they need not occupy a tail slot.
 	return !slotIsSpilled(_slot);
