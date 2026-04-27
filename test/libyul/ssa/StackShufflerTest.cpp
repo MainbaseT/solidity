@@ -99,21 +99,21 @@ Slot parseSlot(std::string_view token)
 
 	if (token.starts_with("v"))
 	{
-		if (auto const num = util::parseArithmetic<ValueId::ValueType>(token.substr(1)))
+		if (auto const num = solidity::util::parseArithmetic<ValueId::ValueType>(token.substr(1)))
 			return Slot::makeValueID(ValueId::makeVariable(*num));
 		throw std::runtime_error(fmt::format("Couldn't parse variable token: {}", token));
 	}
 
 	if (token.starts_with("phi"))
 	{
-		if (auto const num = util::parseArithmetic<ValueId::ValueType>(token.substr(3)))
+		if (auto const num = solidity::util::parseArithmetic<ValueId::ValueType>(token.substr(3)))
 			return Slot::makeValueID(ValueId::makePhi(*num));
 		throw std::runtime_error(fmt::format("Couldn't parse phi token: {}", token));
 	}
 
 	if (token.starts_with("lit"))
 	{
-		if (auto const num = util::parseArithmetic<ValueId::ValueType>(token.substr(3)))
+		if (auto const num = solidity::util::parseArithmetic<ValueId::ValueType>(token.substr(3)))
 			return Slot::makeValueID(ValueId::makeLiteral(*num));
 		throw std::runtime_error(fmt::format("Couldn't parse literal token: {}", token));
 	}
@@ -122,7 +122,7 @@ Slot parseSlot(std::string_view token)
 	if (token.starts_with(returnLabelPrefix) && token.ends_with("]"))
 	{
 		auto const inner = token.substr(returnLabelPrefix.size(), token.size() - returnLabelPrefix.size() - 1);
-		if (auto const num = util::parseArithmetic<ControlFlowGraphs::FunctionGraphID>(inner))
+		if (auto const num = solidity::util::parseArithmetic<ControlFlowGraphs::FunctionGraphID>(inner))
 			return Slot::makeFunctionReturnLabel(*num);
 		throw std::runtime_error(fmt::format("Couldn't parse ReturnLabel token: {}", token));
 	}
@@ -235,7 +235,7 @@ struct ShuffleTestInput
 				result.targetStackTailSet = parseLiveness(value);
 			else if (key == parserKeyStackSize)
 			{
-				if (auto num = util::parseArithmetic<std::size_t>(value))
+				if (auto num = solidity::util::parseArithmetic<std::size_t>(value))
 					result.targetStackSize = *num;
 				else
 					throw std::runtime_error(fmt::format("Couldn't parse targetStackSize: {}", value));

@@ -39,7 +39,7 @@ std::string slotToString(StackSlot const& _slot)
 	case StackSlot::Kind::FunctionReturnLabel:
 		return fmt::format("ReturnLabel[{}]", _slot.functionReturnLabel());
 	}
-	util::unreachable();
+	solidity::util::unreachable();
 }
 
 std::string stackToString(StackData const& _stackData)

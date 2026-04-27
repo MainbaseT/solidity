@@ -196,7 +196,7 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 	yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 
 	// handle the block exit
-	std::visit(util::GenericVisitor{ [this, &_blockId](auto const& exit) { (*this)(_blockId, exit); } }, block.exit);
+	std::visit(solidity::util::GenericVisitor{ [this, &_blockId](auto const& exit) { (*this)(_blockId, exit); } }, block.exit);
 }
 
 void CodeTransform::operator()(SSACFG::InstId _opId, StackData const& _operationInputLayout)
@@ -259,7 +259,7 @@ void CodeTransform::operator()(SSACFG::InstId _opId, StackData const& _operation
 	}();
 
 	// generate code for the operation
-	std::visit(util::GenericVisitor{
+	std::visit(solidity::util::GenericVisitor{
 		[&](SSACFG::BuiltinCall const& _builtin) {
 			m_assembly.setSourceLocation(opOriginLocation);
 			auto const& builtin = m_cfg.evmDialect.builtin(_builtin.builtin);
@@ -276,7 +276,7 @@ void CodeTransform::operator()(SSACFG::InstId _opId, StackData const& _operation
 			builtin.generateCode(transient, m_assembly, m_builtinContext);
 		},
 		[&](SSACFG::Call const& _call) {
-			auto const* returnLabel = util::valueOrNullptr(m_returnLabels, _opId);
+			auto const* returnLabel = solidity::util::valueOrNullptr(m_returnLabels, _opId);
 			// check that if we have a return label, the call can continue
 			yulAssert(!!returnLabel == _call.canContinue);
 			m_assembly.setSourceLocation(opOriginLocation);
@@ -394,7 +394,7 @@ void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlo
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
 	auto const& block = m_cfg.block(_blockId);
 	yulAssert(!block.operations.empty(), "Terminated block must have at least one operation.");
-	std::visit(util::GenericVisitor{
+	std::visit(solidity::util::GenericVisitor{
 		[&](SSACFG::BuiltinCall const& _builtin) {
 			yulAssert(m_cfg.evmDialect.builtin(_builtin.builtin).controlFlowSideEffects.terminatesOrReverts(), "Last operation of Terminated block must terminate or revert.");
 		},

@@ -81,27 +81,27 @@ std::size_t State::size() const
 
 std::size_t State::count(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_histogram, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_histogram, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::countInArgs(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_histogramArgs, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_histogramArgs, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::countInTail(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_histogramTail, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_histogramTail, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::countReachable(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_histogramReachable, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_histogramReachable, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::targetMinCount(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_target.minCount, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_target.minCount, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::targetArgsCount(StackSlot const& _slot) const

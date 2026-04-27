@@ -440,7 +440,7 @@ void SSACFGBuilder::assign(std::vector<std::reference_wrapper<Scope::Variable co
 std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const& _call)
 {
 	bool canContinue = true;
-	SSACFG::Operation operation = std::visit(util::GenericVisitor{
+	SSACFG::Operation operation = std::visit(solidity::util::GenericVisitor{
 		[&](BuiltinName const& _builtinName)
 		{
 			auto const& builtin = m_dialect.builtin(_builtinName.handle);
@@ -553,7 +553,7 @@ void SSACFGBuilder::writeVariable(Scope::Variable const& _variable, SSACFG::Bloc
 Scope::Function const& SSACFGBuilder::lookupFunction(YulName _name) const
 {
 	Scope::Function const* function = nullptr;
-	yulAssert(m_scope->lookup(_name, util::GenericVisitor{
+	yulAssert(m_scope->lookup(_name, solidity::util::GenericVisitor{
 		[](Scope::Variable&) { yulAssert(false, "Expected function name."); },
 		[&](Scope::Function& _function) { function = &_function; }
 	}), "Function name not found.");
@@ -565,7 +565,7 @@ Scope::Variable const& SSACFGBuilder::lookupVariable(YulName _name) const
 {
 	yulAssert(m_scope, "");
 	Scope::Variable const* var = nullptr;
-	if (m_scope->lookup(_name, util::GenericVisitor{
+	if (m_scope->lookup(_name, solidity::util::GenericVisitor{
 		[&](Scope::Variable const& _var) { var = &_var; },
 		[](Scope::Function const&)
 		{

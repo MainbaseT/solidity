@@ -34,7 +34,7 @@ bool PhiInverse::noOp() const
 
 SSACFG::ValueId PhiInverse::operator()(SSACFG::ValueId _valueId) const
 {
-	return util::valueOrDefault(m_phiToPreImage, _valueId, _valueId);
+	return solidity::util::valueOrDefault(m_phiToPreImage, _valueId, _valueId);
 }
 
 std::map<SSACFG::ValueId, SSACFG::ValueId> const& PhiInverse::data() const

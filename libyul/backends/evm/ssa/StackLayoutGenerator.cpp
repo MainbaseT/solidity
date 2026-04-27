@@ -278,7 +278,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 	}
 
 	std::visit(
-		util::GenericVisitor{
+		solidity::util::GenericVisitor{
 			[&](SSACFG::BasicBlock::ConditionalJump const& _cJump) {
 				auto const& blockLiveOut = m_liveness.liveOut(_blockId);
 

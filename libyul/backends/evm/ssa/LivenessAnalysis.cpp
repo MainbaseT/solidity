@@ -20,8 +20,6 @@
 
 #include <libsolutil/Visitor.h>
 
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/range/conversion.hpp>
 
 #include <range/v3/view/filter.hpp>
@@ -33,112 +31,17 @@ namespace
 {
 constexpr auto excludingLiteralsFilter()
 {
-	return [](LivenessAnalysis::LivenessData::Value const& _valueId) -> bool
+	return [](SSACFG::ValueId const& _valueId) -> bool
 	{
 		return !_valueId.isLiteral();
 	};
 }
 }
 
-bool LivenessAnalysis::LivenessData::contains(Value const& _valueId) const
-{
-	return findEntry(_valueId) != m_liveCounts.end();
-}
-
-LivenessAnalysis::LivenessData::Count LivenessAnalysis::LivenessData::count(Value const& _valueId) const
-{
-	if (
-		auto const it = findEntry(_valueId);
-		it != m_liveCounts.end()
-	)
-		return it->second;
-	return 0;
-}
-
-LivenessAnalysis::LivenessData::LiveCounts::const_iterator LivenessAnalysis::LivenessData::begin() const
-{
-	return m_liveCounts.begin();
-}
-
-LivenessAnalysis::LivenessData::LiveCounts::const_iterator LivenessAnalysis::LivenessData::end() const
-{
-	return m_liveCounts.end();
-}
-
-LivenessAnalysis::LivenessData::LiveCounts::size_type LivenessAnalysis::LivenessData::size() const
-{
-	return m_liveCounts.size();
-}
-
-bool LivenessAnalysis::LivenessData::empty() const { return m_liveCounts.empty(); }
-
-void LivenessAnalysis::LivenessData::insert(Value const& _value, Count _count)
-{
-	if (_count == 0)
-		return;
-
-	auto it = findEntry(_value);
-	if (it != m_liveCounts.end())
-		it->second += _count;
-	else
-		m_liveCounts.emplace_back(_value, _count);
-}
-
-LivenessAnalysis::LivenessData& LivenessAnalysis::LivenessData::maxUnion(LivenessData const& _other)
-{
-	for (auto const& [value, count]: _other.m_liveCounts)
-	{
-		auto it = findEntry(value);
-		if (it != m_liveCounts.end())
-			it->second = std::max(it->second, count);
-		else
-			m_liveCounts.emplace_back(value, count);
-	}
-	return *this;
-}
-
-LivenessAnalysis::LivenessData& LivenessAnalysis::LivenessData::operator+=(LivenessData const& _other)
-{
-	for (auto const& [valueId, count]: _other.m_liveCounts)
-		insert(valueId, count);
-	return *this;
-}
-
-LivenessAnalysis::LivenessData& LivenessAnalysis::LivenessData::operator-=(LivenessData const& _other)
-{
-	std::erase_if(m_liveCounts, [&](auto const& entry) { return _other.contains(entry.first); });
-	return *this;
-}
-
-void LivenessAnalysis::LivenessData::erase(Value const& _value)
-{
-	if (
-		auto const it = findEntry(_value);
-		it != m_liveCounts.end()
-	)
-		m_liveCounts.erase(it);
-}
-
-void LivenessAnalysis::LivenessData::remove(Value const& _value, Count _count)
-{
-	if (_count == 0)
-		return;
-
-	auto it = findEntry(_value);
-	if (it != m_liveCounts.end())
-	{
-		if (it->second <= _count)
-			m_liveCounts.erase(it);
-		else
-			it->second -= _count;
-	}
-}
-
-
 LivenessAnalysis::LivenessData LivenessAnalysis::blockExitValues(SSACFG::BlockId const& _blockId) const
 {
 	LivenessData result;
-	util::GenericVisitor exitVisitor{
+	solidity::util::GenericVisitor exitVisitor{
 		[](SSACFG::BasicBlock::MainExit const&) {},
 		[&](SSACFG::BasicBlock::FunctionReturn const& _functionReturn)
 		{
@@ -154,17 +57,6 @@ LivenessAnalysis::LivenessData LivenessAnalysis::blockExitValues(SSACFG::BlockId
 		[](SSACFG::BasicBlock::Terminated const&) {}};
 	std::visit(exitVisitor, m_cfg.block(_blockId).exit);
 	return result;
-}
-
-
-LivenessAnalysis::LivenessData::LiveCounts::iterator LivenessAnalysis::LivenessData::findEntry(Value const& _value)
-{
-	return ranges::find_if(m_liveCounts, [&](auto const& _entry) { return _entry.first == _value; });
-}
-
-LivenessAnalysis::LivenessData::LiveCounts::const_iterator LivenessAnalysis::LivenessData::findEntry(Value const& _value) const
-{
-	return ranges::find_if(m_liveCounts, [&](auto const& _entry) { return _entry.first == _value; });
 }
 
 LivenessAnalysis::LivenessAnalysis(SSACFG const& _cfg):
