@@ -199,7 +199,7 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 	std::visit(util::GenericVisitor{ [this, &_blockId](auto const& exit) { (*this)(_blockId, exit); } }, block.exit);
 }
 
-void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _operationInputLayout)
+void CodeTransform::operator()(SSACFG::InstId _opId, StackData const& _operationInputLayout)
 {
 	SSACFG::Operation const& _operation = m_cfg.operation(_opId);
 	bool const hasReturnLabel =
