@@ -235,7 +235,7 @@ void SSACFGBuilder::operator()(Switch const& _switch)
 
 	auto makeValueCompare = [&](Case const& _case) {
 		auto outputValue = m_graph.newVariable(m_currentBlock);
-		auto opId = m_graph.makeOperation(SSACFG::Operation{
+		auto opId = m_graph.makeOperation(m_currentBlock, SSACFG::Operation{
 			{outputValue},
 			SSACFG::BuiltinCall{*equalityBuiltinHandle, {}},
 			{m_graph.newLiteral(debugDataOf(_case), _case.value->value.value()), expression}
@@ -479,7 +479,7 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 		}
 	}, _call.functionName);
 	auto results = operation.outputs;
-	currentBlock().operations.emplace_back(m_graph.makeOperation(std::move(operation), debugDataOf(_call)));
+	currentBlock().operations.emplace_back(m_graph.makeOperation(m_currentBlock, std::move(operation), debugDataOf(_call)));
 	if (!canContinue)
 	{
 		currentBlock().exit = SSACFG::BasicBlock::Terminated{};

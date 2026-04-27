@@ -90,6 +90,8 @@ public:
 		std::vector<ValueId> outputs{};
 		std::variant<BuiltinCall, Call> kind;
 		std::vector<ValueId> inputs{};
+		/// Block this operation lives in. Set by `makeOperation`.
+		BlockId block{};
 	};
 	struct BasicBlock
 	{
@@ -162,8 +164,15 @@ public:
 	BasicBlock const& block(BlockId _id) const { return m_blocks.at(_id.value); }
 	size_t numBlocks() const { return m_blocks.size(); }
 
-	InstId makeOperation(Operation _op, langutil::DebugData::ConstPtr _debugData = {})
+	InstId makeOperation(BlockId _block, Operation _op, langutil::DebugData::ConstPtr _debugData = {})
 	{
+		yulAssert(_block.hasValue());
+		for (ValueId const& output: _op.outputs)
+		{
+			yulAssert(output.isVariable());
+			yulAssert(m_variables.at(output.value()).definingBlock == _block);
+		}
+		_op.block = _block;
 		InstId id{static_cast<InstId::ValueType>(m_operations.size())};
 		m_operations.emplace_back(std::move(_op));
 		if (debugInfo && _debugData)
