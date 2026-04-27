@@ -235,10 +235,10 @@ void SSACFGBuilder::operator()(Switch const& _switch)
 
 	auto makeValueCompare = [&](Case const& _case) {
 		auto outputValue = m_graph.newVariable(m_currentBlock);
-		auto opId = m_graph.makeOperation(SSACFG::Operation{
-			{outputValue},
-			SSACFG::BuiltinCall{*equalityBuiltinHandle, {}},
-			{m_graph.newLiteral(debugDataOf(_case), _case.value->value.value()), expression}
+		auto opId = m_graph.makeOperation(m_currentBlock, SSACFG::Operation{
+			.outputs = {outputValue},
+			.kind = SSACFG::BuiltinCall{*equalityBuiltinHandle, {}},
+			.inputs = {m_graph.newLiteral(debugDataOf(_case), _case.value->value.value()), expression},
 		}, debugDataOf(_case));
 		currentBlock().operations.emplace_back(opId);
 		return outputValue;
@@ -452,7 +452,7 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 					yulAssert(std::holds_alternative<Literal>(arg));
 					literalArguments.emplace_back(std::get<Literal>(arg));
 				}
-			SSACFG::Operation result{{}, SSACFG::BuiltinCall{_builtinName.handle, std::move(literalArguments)}, {}};
+			SSACFG::Operation result{.kind = SSACFG::BuiltinCall{_builtinName.handle, std::move(literalArguments)}};
 			for (auto&& [idx, arg]: _call.arguments | ranges::views::enumerate | ranges::views::reverse)
 				if (!builtin.literalArgument(idx).has_value())
 					result.inputs.emplace_back(std::visit(*this, arg));
@@ -470,7 +470,7 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 			canContinue = m_sideEffects.functionSideEffects().at(definition).canContinue;
 			auto const calleeIt = m_functionScopeToID.find(&function);
 			yulAssert(calleeIt != m_functionScopeToID.end(), "Called function has no registered graph id.");
-			SSACFG::Operation result{{}, SSACFG::Call{calleeIt->second, canContinue}, {}};
+			SSACFG::Operation result{.kind = SSACFG::Call{calleeIt->second, canContinue}};
 			for (auto const& arg: _call.arguments | ranges::views::reverse)
 				result.inputs.emplace_back(std::visit(*this, arg));
 			for (size_t i = 0; i < function.numReturns; ++i)
@@ -479,7 +479,7 @@ std::vector<SSACFG::ValueId> SSACFGBuilder::visitFunctionCall(FunctionCall const
 		}
 	}, _call.functionName);
 	auto results = operation.outputs;
-	currentBlock().operations.emplace_back(m_graph.makeOperation(std::move(operation), debugDataOf(_call)));
+	currentBlock().operations.emplace_back(m_graph.makeOperation(m_currentBlock, std::move(operation), debugDataOf(_call)));
 	if (!canContinue)
 	{
 		currentBlock().exit = SSACFG::BasicBlock::Terminated{};

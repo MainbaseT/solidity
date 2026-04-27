@@ -149,21 +149,6 @@ private:
 
 }
 
-std::string ValueId::str(SSACFG const& _cfg) const
-{
-	if (!hasValue())
-		return "INVALID";
-	switch (kind())
-	{
-		case Kind::Literal:  return toCompactHexWithPrefix(_cfg.literalInfo(*this).value);
-		case Kind::Variable: return fmt::format("v{}", value());
-		case Kind::Phi: return fmt::format("phi{}", value());
-		case Kind::Unreachable: return "[unreachable]";
-	}
-	unreachable();
-}
-
-
 std::string SSACFG::toDot(
 	bool _includeDiGraphDefinition,
 	std::optional<size_t> _functionIndex,

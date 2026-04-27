@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <libyul/backends/evm/ssa/InstructionStore.h>
 #include <libyul/backends/evm/ssa/SSACFGDebugInfo.h>
 #include <libyul/backends/evm/ssa/SSACFGTypes.h>
 
@@ -65,17 +66,9 @@ public:
 	using InstId = ssa::InstId;
 	using ValueId = ssa::ValueId;
 
-	struct BuiltinCall
-	{
-		BuiltinHandle builtin;
-		/// Literal-kind arguments
-		std::vector<Literal> literalArguments;
-	};
-	struct Call
-	{
-		FunctionGraphID graphID;
-		bool canContinue;
-	};
+	using BuiltinCall = InstructionStore::BuiltinCall;
+	using Call = InstructionStore::Call;
+	using Operation = InstructionStore::Operation;
 
 	/// Upsilon records a phi pre-image at a block exit.
 	/// Upsilon(value, phi) means: the value flowing into `phi` from this block is `value`.
@@ -86,11 +79,6 @@ public:
 		ValueId phi;    ///< target phi
 	};
 
-	struct Operation {
-		std::vector<ValueId> outputs{};
-		std::variant<BuiltinCall, Call> kind;
-		std::vector<ValueId> inputs{};
-	};
 	struct BasicBlock
 	{
 		struct MainExit {};
@@ -129,30 +117,17 @@ public:
 			}
 		}
 
-		bool isMainExitBlock() const
-		{
-			return std::holds_alternative<MainExit>(exit);
-		}
-
-		bool isTerminationBlock() const
-		{
-			return std::holds_alternative<Terminated>(exit);
-		}
-
-		bool isFunctionReturnBlock() const
-		{
-			return std::holds_alternative<FunctionReturn>(exit);
-		}
-
-		bool isJumpBlock() const
-		{
-			return std::holds_alternative<Jump>(exit);
-		}
+		bool isMainExitBlock() const { return std::holds_alternative<MainExit>(exit); }
+		bool isTerminationBlock() const { return std::holds_alternative<Terminated>(exit); }
+		bool isFunctionReturnBlock() const { return std::holds_alternative<FunctionReturn>(exit); }
+		bool isJumpBlock() const { return std::holds_alternative<Jump>(exit); }
 	};
 
 	BlockId makeBlock(langutil::DebugData::ConstPtr _debugData)
 	{
-		BlockId blockId { static_cast<BlockId::ValueType>(m_blocks.size()) };
+		// max itself is reserved for the 'empty' block
+		yulAssert(m_blocks.size() < std::numeric_limits<BlockId::ValueType>::max());
+		BlockId const blockId{static_cast<BlockId::ValueType>(m_blocks.size())};
 		m_blocks.emplace_back(BasicBlock{{}, {}, {}, {}, BasicBlock::Terminated{}});
 		if (debugInfo)
 			debugInfo->setBlockDebugData(blockId, std::move(_debugData));
@@ -162,77 +137,49 @@ public:
 	BasicBlock const& block(BlockId _id) const { return m_blocks.at(_id.value); }
 	size_t numBlocks() const { return m_blocks.size(); }
 
-	InstId makeOperation(Operation _op, langutil::DebugData::ConstPtr _debugData = {})
-	{
-		InstId id{static_cast<InstId::ValueType>(m_operations.size())};
-		m_operations.emplace_back(std::move(_op));
-		if (debugInfo && _debugData)
-			debugInfo->setOperationDebugData(id, std::move(_debugData));
-		return id;
-	}
-	Operation& operation(InstId _id) { return m_operations.at(_id.value); }
-	Operation const& operation(InstId _id) const { return m_operations.at(_id.value); }
+	InstructionStore& instructionStore() { return m_instructions; }
+	InstructionStore const& instructionStore() const { return m_instructions; }
 
-private:
-	std::vector<BasicBlock> m_blocks;
-	std::vector<Operation> m_operations;
-public:
-	struct LiteralValue {
-		u256 value;
-	};
-	struct VariableValue {
-		BlockId definingBlock;
-	};
-	struct PhiValue {
-		BlockId block;
-	};
-	struct UnreachableValue {};
+	Operation& operation(InstId _id) { return m_instructions.operation(_id); }
+	Operation const& operation(InstId _id) const { return m_instructions.operation(_id); }
+
+	InstructionStore::LiteralValue const& literalInfo(ValueId const& _valueId) const { return m_instructions.literalInfo(_valueId); }
+	InstructionStore::PhiValue const& phiInfo(ValueId const& _valueId) const { return m_instructions.phiInfo(_valueId); }
+	InstructionStore::PhiValue& phiInfo(ValueId const& _valueId) { return m_instructions.phiInfo(_valueId); }
+	InstructionStore::VariableValue const& variableInfo(ValueId const& _valueId) const { return m_instructions.variableInfo(_valueId); }
+
 	ValueId newPhi(BlockId const _definingBlock)
 	{
-		m_phis.emplace_back(PhiValue{_definingBlock});
-		auto const value = m_phis.size() - 1;
-		yulAssert(value < std::numeric_limits<ValueId::ValueType>::max());
-		auto const id = ValueId::makePhi(static_cast<ValueId::ValueType>(value));
-		if (debugInfo)
-			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(_definingBlock));
-		return id;
-	}
-	ValueId newVariable(BlockId const _definingBlock)
-	{
-		m_variables.emplace_back(VariableValue{_definingBlock});
-		auto const value = m_variables.size() - 1;
-		yulAssert(value < std::numeric_limits<ValueId::ValueType>::max());
-		auto const id = ValueId::makeVariable(static_cast<ValueId::ValueType>(value));
+		auto const id = m_instructions.newPhi(_definingBlock);
 		if (debugInfo)
 			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(_definingBlock));
 		return id;
 	}
 
-	ValueId unreachableValue()
+	ValueId newVariable(BlockId const _definingBlock)
 	{
-		if (!m_unreachableValue)
-			m_unreachableValue = ValueId::makeUnreachable();
-		return *m_unreachableValue;
+		auto const id = m_instructions.newVariable(_definingBlock);
+		if (debugInfo)
+			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(_definingBlock));
+		return id;
 	}
+
+	ValueId unreachableValue() { return m_instructions.unreachableValue(); }
 
 	ValueId newLiteral(langutil::DebugData::ConstPtr _debugData, u256 _value)
 	{
-		auto const it = m_literalMapping.find(_value);
-		if (it != m_literalMapping.end())
-		{
-			ValueId const& valueId = it->second;
-			yulAssert(valueId.hasValue() && m_literals[valueId.value()].value == _value);
-			return valueId;
-		}
+		auto const [id, allocated] = m_instructions.newLiteral(std::move(_value));
+		if (debugInfo && allocated)
+			debugInfo->setValueDebugData(id, std::move(_debugData));
+		return id;
+	}
 
-		m_literals.emplace_back(LiteralValue{std::move(_value)});
-		auto const value = m_literals.size() - 1;
-		yulAssert(value < std::numeric_limits<ValueId::ValueType>::max());
-		auto const literalId = ValueId::makeLiteral(static_cast<ValueId::ValueType>(value));
+	InstId makeOperation(BlockId _block, Operation _op, langutil::DebugData::ConstPtr _debugData = {})
+	{
+		auto const id = m_instructions.makeOperation(_block, std::move(_op));
 		if (debugInfo)
-			debugInfo->setValueDebugData(literalId, std::move(_debugData));
-		m_literalMapping.emplace(_value, literalId);
-		return literalId;
+			debugInfo->setOperationDebugData(id, std::move(_debugData));
+		return id;
 	}
 
 	std::string toDot(
@@ -242,33 +189,9 @@ public:
 		ControlFlowGraphs const* _controlFlow=nullptr
 	) const;
 
-	PhiValue const& phiInfo(ValueId const& _valueId) const
-	{
-		yulAssert(_valueId.hasValue() && _valueId.isPhi());
-		return m_phis.at(_valueId.value());
-	}
-	PhiValue& phiInfo(ValueId const& _valueId)
-	{
-		yulAssert(_valueId.hasValue() && _valueId.isPhi());
-		return m_phis.at(_valueId.value());
-	}
-	LiteralValue const& literalInfo(ValueId const& _valueId) const
-	{
-		yulAssert(_valueId.hasValue() && _valueId.isLiteral());
-		return m_literals.at(_valueId.value());
-	}
-	VariableValue const& variableInfo(ValueId const& _valueId) const
-	{
-		yulAssert(_valueId.hasValue() && _valueId.isVariable());
-		return m_variables.at(_valueId.value());
-	}
-
 private:
-	std::vector<LiteralValue> m_literals;
-	std::map<u256, ValueId> m_literalMapping;
-	std::vector<PhiValue> m_phis;
-	std::vector<VariableValue> m_variables;
-	std::optional<ValueId> m_unreachableValue;
+	std::vector<BasicBlock> m_blocks;
+	InstructionStore m_instructions;
 public:
 	EVMDialect const& evmDialect;
 	std::unique_ptr<DebugInfo> debugInfo;
