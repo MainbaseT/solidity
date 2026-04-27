@@ -86,7 +86,7 @@ struct AssemblyCallbacks
 	SSACFG const* cfg{};
 	AbstractAssembly* assembly{};
 	CallSites const* callSites{};
-	std::map<SSACFG::OperationId, AbstractAssembly::LabelID> const* returnLabels{};
+	std::map<SSACFG::InstId, AbstractAssembly::LabelID> const* returnLabels{};
 };
 static_assert(StackManipulationCallbackConcept<AssemblyCallbacks>);
 
@@ -118,7 +118,7 @@ private:
 		ControlFlowGraphs::FunctionGraphID _graphID);
 
 	void operator()(SSACFG::BlockId _blockId);
-	void operator()(SSACFG::OperationId _opId, StackData const& _operationInputLayout);
+	void operator()(SSACFG::InstId _opId, StackData const& _operationInputLayout);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::MainExit const& _mainExit);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::ConditionalJump const& _conditionalJump);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::Jump const& _jump);
@@ -141,7 +141,7 @@ private:
 	AssemblyCallbacks m_assemblyCallbacks;
 	StackData m_stackData;
 	Stack<AssemblyCallbacks> m_stack;
-	std::map<SSACFG::OperationId, AbstractAssembly::LabelID> m_returnLabels;
+	std::map<SSACFG::InstId, AbstractAssembly::LabelID> m_returnLabels;
 };
 
 }

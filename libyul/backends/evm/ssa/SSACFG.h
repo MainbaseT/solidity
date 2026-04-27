@@ -62,7 +62,7 @@ public:
 	~SSACFG() = default;
 
 	using BlockId = ssa::BlockId;
-	using OperationId = ssa::OperationId;
+	using InstId = ssa::InstId;
 	using ValueId = ssa::ValueId;
 
 	struct BuiltinCall
@@ -111,7 +111,7 @@ public:
 		struct Terminated {};
 		std::vector<BlockId> entries;
 		std::vector<ValueId> phis;
-		std::vector<OperationId> operations;
+		std::vector<InstId> operations;
 		/// Upsilon assignments placed at the block exit (before the terminator).
 		/// They record the phi pre-images for successor blocks.
 		std::vector<Upsilon> upsilons;
@@ -162,16 +162,16 @@ public:
 	BasicBlock const& block(BlockId _id) const { return m_blocks.at(_id.value); }
 	size_t numBlocks() const { return m_blocks.size(); }
 
-	OperationId makeOperation(Operation _op, langutil::DebugData::ConstPtr _debugData = {})
+	InstId makeOperation(Operation _op, langutil::DebugData::ConstPtr _debugData = {})
 	{
-		OperationId id{static_cast<OperationId::ValueType>(m_operations.size())};
+		InstId id{static_cast<InstId::ValueType>(m_operations.size())};
 		m_operations.emplace_back(std::move(_op));
 		if (debugInfo && _debugData)
 			debugInfo->setOperationDebugData(id, std::move(_debugData));
 		return id;
 	}
-	Operation& operation(OperationId _id) { return m_operations.at(_id.value); }
-	Operation const& operation(OperationId _id) const { return m_operations.at(_id.value); }
+	Operation& operation(InstId _id) { return m_operations.at(_id.value); }
+	Operation const& operation(InstId _id) const { return m_operations.at(_id.value); }
 
 private:
 	std::vector<BasicBlock> m_blocks;

@@ -55,14 +55,14 @@ struct SSACFGDebugInfo
 		return getOrEmpty(m_exitDebugData, _id.value);
 	}
 
-	void setOperationDebugData(OperationId _id, langutil::DebugData::ConstPtr _data)
+	void setOperationDebugData(InstId _id, langutil::DebugData::ConstPtr _data)
 	{
 		yulAssert(_id.hasValue());
 		ensureSize(m_operationDebugData, _id.value);
 		m_operationDebugData[_id.value] = std::move(_data);
 	}
 
-	langutil::DebugData::ConstPtr const& operationDebugData(OperationId _id) const
+	langutil::DebugData::ConstPtr const& operationDebugData(InstId _id) const
 	{
 		return getOrEmpty(m_operationDebugData, _id.value);
 	}

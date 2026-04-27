@@ -44,12 +44,12 @@ struct BlockId
 	auto operator<=>(BlockId const&) const = default;
 };
 
-struct OperationId
+struct InstId
 {
 	using ValueType = std::uint32_t;
 	ValueType value = std::numeric_limits<ValueType>::max();
 	bool hasValue() const { return value != std::numeric_limits<ValueType>::max(); }
-	auto operator<=>(OperationId const&) const = default;
+	auto operator<=>(InstId const&) const = default;
 };
 
 class ValueId
@@ -112,12 +112,12 @@ struct fmt::formatter<solidity::yul::ssa::BlockId>
 };
 
 template<>
-struct fmt::formatter<solidity::yul::ssa::OperationId>
+struct fmt::formatter<solidity::yul::ssa::InstId>
 {
 	static auto constexpr parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return ctx.begin(); }
 
 	template<typename FormatContext>
-	auto format(solidity::yul::ssa::OperationId const& _opId, FormatContext& _ctx) const -> decltype(_ctx.out())
+	auto format(solidity::yul::ssa::InstId const& _opId, FormatContext& _ctx) const -> decltype(_ctx.out())
 	{
 		if (!_opId.hasValue())
 			return fmt::format_to(_ctx.out(), "empty");

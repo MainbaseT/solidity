@@ -39,20 +39,20 @@ class CallSites
 public:
 	using CallSiteID = std::uint32_t;
 
-	std::optional<CallSiteID> callSiteID(OperationId _op) const
+	std::optional<CallSiteID> callSiteID(InstId _op) const
 	{
 		if (auto const it = ranges::find(m_data, _op); it != m_data.end())
 			return static_cast<CallSiteID>(std::distance(m_data.begin(), it));
 		return std::nullopt;
 	}
 
-	OperationId operationId(CallSiteID _callSite) const
+	InstId operationId(CallSiteID _callSite) const
 	{
 		yulAssert(_callSite < m_data.size());
 		return m_data[_callSite];
 	}
 
-	CallSiteID addCallSite(OperationId _op)
+	CallSiteID addCallSite(InstId _op)
 	{
 		if (auto const id = callSiteID(_op))
 			return *id;
@@ -61,7 +61,7 @@ public:
 		return static_cast<CallSiteID>(m_data.size() - 1);
 	}
 private:
-	std::vector<OperationId> m_data;
+	std::vector<InstId> m_data;
 };
 
 /// A discriminated union corresponding to a single EVM stack slot.
