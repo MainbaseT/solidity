@@ -10,8 +10,7 @@ If you have any questions or need our help, feel free to post them in the PR or 
 <!-- Describe the purpose of this PR. -->
 
 ## Checklist
-- [ ] I have read the [contributing guidelines](https://docs.soliditylang.org/en/latest/contributing.html) and
-      the [review checklist](https://github.com/argotorg/solidity/blob/develop/ReviewChecklist.md)
+- [ ] I have read the [contributing guidelines](https://docs.soliditylang.org/en/latest/contributing.html) and the [review checklist](https://github.com/argotorg/solidity/blob/develop/ReviewChecklist.md)
 - [ ] I have personally reviewed, understood, and tested every change in this PR
 
 ## AI Disclosure
