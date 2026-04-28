@@ -253,10 +253,11 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 			)
 				stack.declareJunk(depth);
 
+		StackSlotLiveness const opLiveOutSlots = toStackSlotLiveness(opLiveOutWithoutOutputs);
 		std::size_t const targetSize = findOptimalTargetSize(
 			stack.data(),
 			requiredStackTop,
-			opLiveOutWithoutOutputs,
+			opLiveOutSlots,
 			junkCanBeAdded,
 			m_hasFunctionReturnLabel
 		);
@@ -264,7 +265,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 			auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(
 				stack,
 				requiredStackTop,
-				opLiveOutWithoutOutputs,
+				opLiveOutSlots,
 				targetSize
 			);
 			yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
@@ -278,7 +279,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 	}
 
 	std::visit(
-		util::GenericVisitor{
+		solidity::util::GenericVisitor{
 			[&](SSACFG::BasicBlock::ConditionalJump const& _cJump) {
 				auto const& blockLiveOut = m_liveness.liveOut(_blockId);
 
@@ -290,15 +291,16 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				if (!conditionSlotAlreadyFinal)
 				{
 					auto const condition = Slot::makeValueID(_cJump.condition);
+					StackSlotLiveness const blockLiveOutSlots = toStackSlotLiveness(blockLiveOut);
 					auto const targetSize = findOptimalTargetSize(
 						stack.data(),
 						{condition},
-						blockLiveOut,
+						blockLiveOutSlots,
 						false,
 						m_hasFunctionReturnLabel
 					);
 					auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(
-						stack, {condition}, blockLiveOut, targetSize
+						stack, {condition}, blockLiveOutSlots, targetSize
 					);
 					yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 				}

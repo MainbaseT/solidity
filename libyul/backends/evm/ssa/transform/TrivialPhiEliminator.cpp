@@ -235,7 +235,7 @@ private:
 			for (auto const opId: block.operations)
 				for (auto& input: cfg.operation(opId).inputs)
 					input = canonicalize(input);
-			std::visit(util::GenericVisitor{
+			std::visit(solidity::util::GenericVisitor{
 				[&](SSACFG::BasicBlock::FunctionReturn& r) {
 					for (auto& v: r.returnValues)
 						v = canonicalize(v);

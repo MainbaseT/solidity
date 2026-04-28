@@ -101,7 +101,9 @@ add_library(yul
 	backends/evm/ssa/StackLayoutGenerator.h
 	backends/evm/ssa/StackShuffler.cpp
 	backends/evm/ssa/StackShuffler.h
+	backends/evm/ssa/StackSlotLiveness.h
 	backends/evm/ssa/StackToMemorySpilling.h
+	backends/evm/ssa/util/UseCountSet.h
 	backends/evm/ssa/StackUtils.cpp
 	backends/evm/ssa/StackUtils.h
 	backends/evm/ssa/io/DotExporterBase.cpp

@@ -26,7 +26,7 @@ using namespace solidity::yul::ssa::detail;
 
 Target::Target(
 	StackData const& _args,
-	LivenessAnalysis::LivenessData const& _liveOut,
+	StackSlotLiveness const& _liveOut,
 	std::size_t const _targetSize,
 	SpilledVariables const* _spilledVariables
 ):
@@ -40,9 +40,9 @@ Target::Target(
 	for (auto const& arg: _args)
 		if (!arg.isJunk() && !slotIsSpilled(arg, _spilledVariables))
 			++minCount[arg];
-	for (auto const& liveValueId: _liveOut | ranges::views::keys)
-		if (!(_spilledVariables && _spilledVariables->isSpilled(liveValueId)))
-			++minCount[StackSlot::makeValueID(liveValueId)];
+	for (auto const& liveSlot: _liveOut | ranges::views::keys)
+		if (!slotIsSpilled(liveSlot, _spilledVariables))
+			++minCount[liveSlot];
 }
 
 State::State(StackData const& _stackData, Target const& _target, SpilledVariables const* const _spilledVariables, std::size_t const _reachableStackDepth):
@@ -81,27 +81,27 @@ std::size_t State::size() const
 
 std::size_t State::count(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_histogram, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_histogram, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::countInArgs(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_histogramArgs, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_histogramArgs, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::countInTail(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_histogramTail, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_histogramTail, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::countReachable(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_histogramReachable, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_histogramReachable, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::targetMinCount(StackSlot const& _slot) const
 {
-	return util::valueOrDefault(m_target.minCount, _slot, static_cast<size_t>(0));
+	return solidity::util::valueOrDefault(m_target.minCount, _slot, static_cast<size_t>(0));
 }
 
 std::size_t State::targetArgsCount(StackSlot const& _slot) const
@@ -133,7 +133,7 @@ bool State::requiredInArgs(StackSlot const& _slot) const
 
 bool State::requiredInTail(StackSlot const& _slot) const
 {
-	if (!_slot.isValueID() || !m_target.liveOut.contains(_slot.valueID()))
+	if (!_slot.isValueID() || !m_target.liveOut.contains(_slot))
 		return false;
 	// Spilled values can be rematerialized, so they need not occupy a tail slot.
 	return !slotIsSpilled(_slot);

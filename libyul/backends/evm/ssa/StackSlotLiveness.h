@@ -16,28 +16,25 @@
 */
 // SPDX-License-Identifier: GPL-3.0
 
-#include <libyul/backends/evm/ssa/PhiInverse.h>
+#pragma once
 
-using namespace solidity::yul::ssa;
+#include <libyul/backends/evm/ssa/LivenessAnalysis.h>
+#include <libyul/backends/evm/ssa/Stack.h>
+#include <libyul/backends/evm/ssa/util/UseCountSet.h>
 
-PhiInverse::PhiInverse(SSACFG const& _cfg, SSACFG::BlockId const& _from, SSACFG::BlockId const& _to)
+namespace solidity::yul::ssa
 {
-	for (auto const& [phiValue, phi]: _cfg.block(_from).upsilons)
-		if (_cfg.phiInfo(phi).block == _to)
-			m_phiToPreImage[phi] = phiValue;
+
+/// Liveness counts keyed on StackSlot
+using StackSlotLiveness = util::UseCountSet<StackSlot>;
+
+inline StackSlotLiveness toStackSlotLiveness(LivenessAnalysis::LivenessData const& _liveness)
+{
+	StackSlotLiveness::Entries entries;
+	entries.reserve(_liveness.size());
+	for (auto const& [valueId, count]: _liveness)
+		entries.emplace_back(StackSlot::makeValueID(valueId), count);
+	return StackSlotLiveness{std::move(entries)};
 }
 
-bool PhiInverse::noOp() const
-{
-	return m_phiToPreImage.empty();
-}
-
-SSACFG::ValueId PhiInverse::operator()(SSACFG::ValueId _valueId) const
-{
-	return solidity::util::valueOrDefault(m_phiToPreImage, _valueId, _valueId);
-}
-
-std::map<SSACFG::ValueId, SSACFG::ValueId> const& PhiInverse::data() const
-{
-	return m_phiToPreImage;
 }

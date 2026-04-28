@@ -46,7 +46,7 @@ Json toJson(SSACFG const& _cfg, std::vector<SSACFG::ValueId> const& _values)
 Json toJson(Json& _ret, SSACFG const& _cfg, SSACFG::Operation const& _operation, ControlFlowGraphs const& _controlFlow)
 {
 	Json opJson = Json::object();
-	std::visit(util::GenericVisitor{
+	std::visit(solidity::util::GenericVisitor{
 		[&](SSACFG::Call const& _call) {
 			_ret["type"] = "FunctionCall";
 			opJson["op"] = _controlFlow.functionGraph(_call.graphID)->name;
@@ -72,7 +72,7 @@ Json toJson(Json& _ret, SSACFG const& _cfg, SSACFG::Operation const& _operation,
 
 Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const* _liveness, ControlFlowGraphs const& _controlFlow)
 {
-	auto const valueToString = [&](LivenessAnalysis::LivenessData::LiveCounts::value_type const& _live) { return _live.first.str(_cfg); };
+	auto const valueToString = [&](auto const& _live) { return _live.first.str(_cfg); };
 
 	Json blockJson = Json::object();
 	auto const& block = _cfg.block(_blockId);
@@ -122,12 +122,12 @@ Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const
 Json exportBlock(SSACFG const& _cfg, SSACFG::BlockId _entryId, LivenessAnalysis const* _liveness, ControlFlowGraphs const& _controlFlow)
 {
 	Json blocksJson = Json::array();
-	util::BreadthFirstSearch<SSACFG::BlockId> bfs{{{_entryId}}};
+	solidity::util::BreadthFirstSearch<SSACFG::BlockId> bfs{{{_entryId}}};
 	bfs.run([&](SSACFG::BlockId _blockId, auto _addChild) {
 		Json blockJson = toJson(_cfg, _blockId, _liveness, _controlFlow);
 
 		Json exitBlockJson = Json::object();
-		std::visit(util::GenericVisitor{
+		std::visit(solidity::util::GenericVisitor{
 			[&](SSACFG::BasicBlock::MainExit const&) {
 				exitBlockJson["type"] = "MainExit";
 			},
