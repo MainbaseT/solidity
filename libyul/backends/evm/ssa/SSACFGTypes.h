@@ -40,7 +40,7 @@ struct BlockId
 {
 	using ValueType = std::uint32_t;
 	ValueType value = std::numeric_limits<ValueType>::max();
-	bool hasValue() const { return value != std::numeric_limits<ValueType>::max(); }
+	constexpr bool hasValue() const noexcept { return value != std::numeric_limits<ValueType>::max(); }
 	auto operator<=>(BlockId const&) const = default;
 };
 
@@ -48,7 +48,7 @@ struct InstId
 {
 	using ValueType = std::uint32_t;
 	ValueType value = std::numeric_limits<ValueType>::max();
-	bool hasValue() const { return value != std::numeric_limits<ValueType>::max(); }
+	constexpr bool hasValue() const noexcept { return value != std::numeric_limits<ValueType>::max(); }
 	auto operator<=>(InstId const&) const = default;
 };
 
