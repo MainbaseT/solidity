@@ -61,7 +61,7 @@ struct GasAccumulatingCallbacks
 };
 
 /// Transform stack data by replacing all its phi variables with their respective preimages.
-StackData stackPreImage(StackData _stack, PhiInverse const& _phiInverse);
+StackData stackPreImage(SSACFG const& _cfg, StackData _stack, PhiInverse const& _phiInverse);
 
 std::size_t findOptimalTargetSize(
 	StackData const& _stackData,

@@ -19,6 +19,7 @@
 #pragma once
 
 #include <libyul/backends/evm/ssa/LivenessAnalysis.h>
+#include <libyul/backends/evm/ssa/SSACFG.h>
 #include <libyul/backends/evm/ssa/Stack.h>
 #include <libyul/backends/evm/ssa/util/UseCountSet.h>
 
@@ -28,12 +29,12 @@ namespace solidity::yul::ssa
 /// Liveness counts keyed on StackSlot
 using StackSlotLiveness = util::UseCountSet<StackSlot>;
 
-inline StackSlotLiveness toStackSlotLiveness(LivenessAnalysis::LivenessData const& _liveness)
+inline StackSlotLiveness toStackSlotLiveness(SSACFG const& _cfg, LivenessAnalysis::LivenessData const& _liveness)
 {
 	StackSlotLiveness::Entries entries;
 	entries.reserve(_liveness.size());
 	for (auto const& [valueId, count]: _liveness)
-		entries.emplace_back(StackSlot::makeValueID(valueId), count);
+		entries.emplace_back(StackSlot::makeValueID(_cfg, valueId), count);
 	return StackSlotLiveness{std::move(entries)};
 }
 

@@ -18,6 +18,9 @@
 
 #pragma once
 
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/traits.hpp>
+
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
@@ -114,15 +117,13 @@ public:
 		return *this;
 	}
 
-	template<typename Range>
-	void insertAll(Range const& _values)
+	void insertAll(ranges::input_range auto&& _values) requires std::convertible_to<ranges::range_reference_t<decltype(_values)>, Key>
 	{
 		for (auto const& value: _values)
 			insert(value);
 	}
 
-	template<typename Range>
-	void eraseAll(Range const& _values)
+	void eraseAll(ranges::input_range auto&& _values) requires std::convertible_to<ranges::range_reference_t<decltype(_values)>, Key>
 	{
 		for (auto const& value: _values)
 			erase(value);

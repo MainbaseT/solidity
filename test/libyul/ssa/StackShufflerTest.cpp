@@ -18,6 +18,8 @@
 
 #include <test/libyul/ssa/StackShufflerTest.h>
 
+#include <libyul/backends/evm/ssa/InstructionStore.h>
+#include <libyul/backends/evm/ssa/SSACFG.h>
 #include <libyul/backends/evm/ssa/Stack.h>
 #include <libyul/backends/evm/ssa/StackShuffler.h>
 #include <libyul/backends/evm/ssa/StackSlotLiveness.h>
@@ -29,6 +31,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <sstream>
@@ -55,30 +58,31 @@ std::string_view constexpr parserKeyInitialSpilled {"initialSpilledSet"};
 
 using Slot = StackSlot;
 using ValueId = SSACFG::ValueId;
+
+struct ParsedIdentifierTable
+{
+	InstructionStore store;
+	std::map<std::string, InstId> tokenToId;
+	std::map<InstId, std::string> idToToken;
+
+	std::string render(StackSlot const& _slot) const
+	{
+		if (_slot.isValueID())
+			if (auto const it = idToToken.find(_slot.valueID().instId()); it != idToToken.end())
+				return it->second;
+		return slotToString(_slot);
+	}
+};
+
 struct StackManipulationCallbacks
 {
-	void swap(StackDepth _depth) const
-	{
-		if (hook)
-			(*hook)(fmt::format("SWAP{}", _depth.value));
-	}
-	void dup(StackDepth const _depth) const
-	{
-		if (hook)
-			(*hook)(fmt::format("DUP{}", _depth.value));
-	}
-	void push(Slot const& _slot) const
-	{
-		if (hook)
-			(*hook)(fmt::format("PUSH {}", slotToString(_slot)));
-	}
-	void pop() const
-	{
-		if (hook)
-			(*hook)("POP");
-	}
+	void swap(StackDepth _depth) const { hook(fmt::format("SWAP{}", _depth.value)); }
+	void dup(StackDepth const _depth) const { hook(fmt::format("DUP{}", _depth.value)); }
+	void push(Slot const& _slot) const { hook(fmt::format("PUSH {}", table.render(_slot))); }
+	void pop() const { hook("POP"); }
 
-	std::optional<std::function<void(std::string const&)>> hook = std::nullopt;
+	ParsedIdentifierTable const& table;
+	std::function<void(std::string const&)> hook;
 };
 using TestStack = Stack<StackManipulationCallbacks>;
 
@@ -91,46 +95,56 @@ std::string_view trim(std::string_view s)
 }
 
 /// Parse a value ID token like "v172", "phi109", "lit7", or "JUNK".
-Slot parseSlot(std::string_view token)
+Slot parseSlot(ParsedIdentifierTable& _table, std::string_view _token)
 {
-	if (token == "JUNK")
+	if (_token == "JUNK")
 		return Slot::makeJunk();
 
-	if (token.starts_with("v"))
-	{
-		if (auto const num = solidity::util::parseArithmetic<ValueId::ValueType>(token.substr(1)))
-			return Slot::makeValueID(ValueId::makeVariable(*num));
-		throw std::runtime_error(fmt::format("Couldn't parse variable token: {}", token));
-	}
-
-	if (token.starts_with("phi"))
-	{
-		if (auto const num = solidity::util::parseArithmetic<ValueId::ValueType>(token.substr(3)))
-			return Slot::makeValueID(ValueId::makePhi(*num));
-		throw std::runtime_error(fmt::format("Couldn't parse phi token: {}", token));
-	}
-
-	if (token.starts_with("lit"))
-	{
-		if (auto const num = solidity::util::parseArithmetic<ValueId::ValueType>(token.substr(3)))
-			return Slot::makeValueID(ValueId::makeLiteral(*num));
-		throw std::runtime_error(fmt::format("Couldn't parse literal token: {}", token));
-	}
-
 	static constexpr std::string_view returnLabelPrefix = "ReturnLabel[";
-	if (token.starts_with(returnLabelPrefix) && token.ends_with("]"))
+	if (_token.starts_with(returnLabelPrefix) && _token.ends_with("]"))
 	{
-		auto const inner = token.substr(returnLabelPrefix.size(), token.size() - returnLabelPrefix.size() - 1);
+		auto const inner = _token.substr(returnLabelPrefix.size(), _token.size() - returnLabelPrefix.size() - 1);
 		if (auto const num = solidity::util::parseArithmetic<ControlFlowGraphs::FunctionGraphID>(inner))
 			return Slot::makeFunctionReturnLabel(*num);
-		throw std::runtime_error(fmt::format("Couldn't parse ReturnLabel token: {}", token));
+		throw std::runtime_error(fmt::format("Couldn't parse ReturnLabel token: {}", _token));
 	}
 
-	throw std::runtime_error(fmt::format("Unknown token: {}", token));
+	auto const allocateInst = [&]() -> InstId
+	{
+		if (_token.starts_with("phi"))
+		{
+			if (!solidity::util::parseArithmetic<InstId::ValueType>(_token.substr(3)))
+				throw std::runtime_error(fmt::format("Couldn't parse phi token: {}", _token));
+			return _table.store.appendPhi({0});
+		}
+		if (_token.starts_with("lit"))
+		{
+			if (auto const num = solidity::util::parseArithmetic<InstId::ValueType>(_token.substr(3)))
+				return _table.store.appendLiteral({0}, u256(*num));
+			throw std::runtime_error(fmt::format("Couldn't parse literal token: {}", _token));
+		}
+		if (_token.starts_with("v"))
+		{
+			if (!solidity::util::parseArithmetic<InstId::ValueType>(_token.substr(1)))
+				throw std::runtime_error(fmt::format("Couldn't parse variable token: {}", _token));
+			return _table.store.appendBuiltinCall({0}, {}, {}, /*numOutputs*/ 1);
+		}
+		throw std::runtime_error(fmt::format("Unknown token: {}", _token));
+	};
+
+	std::string const tokenStr{_token};
+	auto const it = _table.tokenToId.find(tokenStr);
+	InstId const id = it != _table.tokenToId.end() ? it->second : allocateInst();
+	if (it == _table.tokenToId.end())
+	{
+		_table.tokenToId.emplace(tokenStr, id);
+		_table.idToToken.emplace(id, tokenStr);
+	}
+	return Slot::makeValueID(_table.store, ValueId{id, 0});
 }
 
 /// Parse a string like "[v172, phi109, lit7, JUNK]" into Stack::Data
-TestStack::Data parseSlots(std::string_view _input, char const brackBegin = '[', char const brackEnd = ']')
+TestStack::Data parseSlots(ParsedIdentifierTable& _table, std::string_view _input, char const brackBegin = '[', char const brackEnd = ']')
 {
 	TestStack::Data result;
 
@@ -153,16 +167,17 @@ TestStack::Data parseSlots(std::string_view _input, char const brackBegin = '[',
 			token = {&*slotTokenBegin, static_cast<std::size_t>(ranges::distance(slotTokenBegin, slotTokenEnd))};
 		token = trim(token);
 		yulAssert(!token.empty(), "Empty token.");
-		result.push_back(parseSlot(token));
+		result.push_back(parseSlot(_table, token));
 	}
 	return result;
 }
 
 /// Parse liveness like "{phi109, phi150, v172}"
-/// Returns StackSlotLiveness with reference count 1 for each value
-StackSlotLiveness parseLiveness(std::string_view _input)
+/// Returns a StackSlotLiveness with reference count 1 for each value, plus the parsed slots
+/// (handy for printing).
+std::pair<StackSlotLiveness, TestStack::Data> parseLiveness(ParsedIdentifierTable& _table, std::string_view _input)
 {
-	auto const slots = parseSlots(_input, '{', '}');
+	auto const slots = parseSlots(_table, _input, '{', '}');
 	StackSlotLiveness::Entries entries;
 	entries.reserve(slots.size());
 	for (auto const& slot: slots)
@@ -170,7 +185,7 @@ StackSlotLiveness parseLiveness(std::string_view _input)
 		yulAssert(slot.isValueID(), "Only value IDs are permitted in liveness definition.");
 		entries.emplace_back(slot, 1u);
 	}
-	return StackSlotLiveness{std::move(entries)};
+	return {StackSlotLiveness{std::move(entries)}, slots};
 }
 
 struct ShuffleTestInput
@@ -178,9 +193,11 @@ struct ShuffleTestInput
 	std::optional<TestStack::Data> initial;
 	std::optional<TestStack::Data> targetStackTop;
 	StackSlotLiveness targetStackTailSet{};
+	TestStack::Data targetStackTailSetSlots{};
 	std::optional<size_t> targetStackSize;
 	bool allowSpilling = false;
 	SpilledVariables initialSpilledSet{};
+	TestStack::Data initialSpilledSetSlots{};
 
 	bool valid() const
 	{
@@ -195,7 +212,7 @@ struct ShuffleTestInput
 		return fullySpecified || exactMode;
 	}
 
-	static ShuffleTestInput parse(std::string_view _source)
+	static ShuffleTestInput parse(ParsedIdentifierTable& _table, std::string_view _source)
 	{
 		ShuffleTestInput result;
 
@@ -227,11 +244,15 @@ struct ShuffleTestInput
 			auto const value = trim(line.substr(colonPos + 1));
 
 			if (key == parserKeyInitialStack)
-				result.initial = parseSlots(value, '[', ']');
+				result.initial = parseSlots(_table, value, '[', ']');
 			else if (key == parserKeyStackTop)
-				result.targetStackTop = parseSlots(value, '[', ']');
+				result.targetStackTop = parseSlots(_table, value, '[', ']');
 			else if (key == parserKeyTailSet)
-				result.targetStackTailSet = parseLiveness(value);
+			{
+				auto [liveness, slots] = parseLiveness(_table, value);
+				result.targetStackTailSet = std::move(liveness);
+				result.targetStackTailSetSlots = std::move(slots);
+			}
 			else if (key == parserKeyStackSize)
 			{
 				if (auto num = solidity::util::parseArithmetic<std::size_t>(value))
@@ -250,12 +271,10 @@ struct ShuffleTestInput
 			}
 			else if (key == parserKeyInitialSpilled)
 			{
-				auto const spillSet = parseLiveness(value);
-				for (auto const& slot: spillSet | ranges::views::keys)
-				{
-					yulAssert(slot.isValueID());
+				auto [liveness, slots] = parseLiveness(_table, value);
+				for (auto const& [slot, _]: liveness)
 					result.initialSpilledSet.spill(slot.valueID());
-				}
+				result.initialSpilledSetSlots = std::move(slots);
 			}
 
 		}
@@ -282,14 +301,16 @@ class TraceRecorder
 public:
 	TraceRecorder(
 		std::ostream& _out,
+		ParsedIdentifierTable const& _table,
 		TestStack::Data const& _targetArgs,
-		StackSlotLiveness const& _targetTail,
+		TestStack::Data const& _targetTailSlots,
 		size_t _targetStackSize,
 		SpilledVariables const& _spillSet
 	):
 		m_out(_out),
+		m_table(_table),
 		m_targetArgs(_targetArgs),
-		m_targetTail(_targetTail),
+		m_targetTail(_targetTailSlots),
 		m_spillSet(_spillSet),
 		m_targetStackSize(_targetStackSize),
 		m_targetTailSize(
@@ -302,10 +323,10 @@ public:
 			fmt::format(
 				"{{{}}}",
 				fmt::join(
-					m_targetTail | ranges::views::keys | ranges::views::transform(
-						[this](Slot const& _slot) {
-							std::string const suffix = (_slot.isValueID() && m_spillSet.isSpilled(_slot.valueID())) ? "*" : "";
-							return slotToString(_slot) + suffix;
+					m_targetTail | ranges::views::transform(
+						[this](StackSlot const& _slot) {
+							std::string const suffix = m_spillSet.isSpilled(_slot.valueID()) ? "*" : "";
+							return m_table.render(_slot) + suffix;
 						}
 					),
 					", "
@@ -351,12 +372,12 @@ public:
 		for (const auto& [operation, stackAfter]: m_entries)
 			for (std::size_t i = 0; i < stackAfter.size(); ++i)
 			{
-				std::string const slotStr = stackAfter[i].isJunk() ? std::string(1, junkSymbol) : slotToString(stackAfter[i]);
+				std::string const slotStr = stackAfter[i].isJunk() ? std::string(1, junkSymbol) : m_table.render(stackAfter[i]);
 				columnWidths[i] = std::max(columnWidths[i], slotStr.size() + 1);
 			}
 		for (std::size_t i = 0; i < m_targetArgs.size() && m_targetTailSize + i < numColumns; ++i)
 		{
-			std::string const slotStr = m_targetArgs[i].isJunk() ? std::string(1, junkSymbol) : slotToString(m_targetArgs[i]);
+			std::string const slotStr = m_targetArgs[i].isJunk() ? std::string(1, junkSymbol) : m_table.render(m_targetArgs[i]);
 			columnWidths[m_targetTailSize + i] = std::max(columnWidths[m_targetTailSize + i], slotStr.size() + 1);
 		}
 
@@ -379,10 +400,11 @@ private:
 	};
 
 	std::ostream& m_out;
+	ParsedIdentifierTable const& m_table;
 	std::vector<TraceEntry> m_entries;
 	bool m_truncated = false;
 	TestStack::Data const& m_targetArgs;
-	StackSlotLiveness const& m_targetTail;
+	TestStack::Data const& m_targetTail;
 	SpilledVariables const& m_spillSet;
 	size_t const m_targetStackSize;
 	size_t const m_targetTailSize;
@@ -440,7 +462,7 @@ private:
 		{
 			emitSeparator(i, _hasExcess, '|');
 			auto const& slot = _entry.stackAfter[i];
-			std::string slotStr = slot.isJunk() ? std::string(1, junkSymbol) : slotToString(slot);
+			std::string slotStr = slot.isJunk() ? std::string(1, junkSymbol) : m_table.render(slot);
 			m_out << fmt::format("{:>{}}", slotStr, _columnWidths[i]);
 		}
 		m_out << '\n';
@@ -469,7 +491,7 @@ private:
 		for (std::size_t i = 0; i < m_targetArgs.size(); ++i)
 		{
 			auto const& slot = m_targetArgs[i];
-			std::string slotStr = slot.isJunk() ? std::string(1, junkSymbol) : slotToString(slot);
+			std::string slotStr = slot.isJunk() ? std::string(1, junkSymbol) : m_table.render(slot);
 			m_out << fmt::format("{:>{}}", slotStr, _columnWidths[m_targetTailSize + i]);
 		}
 
@@ -497,7 +519,8 @@ ShufflingTest::ShufflingTest(std::string const& _filename): TestCase(_filename)
 
 ShufflingTest::TestResult ShufflingTest::run(std::ostream& _stream, std::string const& _linePrefix, bool const _formatted)
 {
-	auto const testConfig = ShuffleTestInput::parse(m_source);
+	ParsedIdentifierTable table;
+	auto const testConfig = ShuffleTestInput::parse(table, m_source);
 	if (!testConfig.valid())
 	{
 		  static constexpr std::string_view formatHelp = R"(initial: [<slot>, ...]
@@ -534,6 +557,8 @@ explicitly provided.)";
 	std::ostringstream oss;
 	StackShufflerResult shuffleResult;
 	SpilledVariables spillSet = testConfig.initialSpilledSet;
+	// Tracks the kind of each spilled value
+	std::vector<StackSlot> spilledSlotList = testConfig.initialSpilledSetSlots;
 
 	// First, when spilling is allowed, run the shuffler repeatedly without recording to determine
 	// the final spill set. Each iteration starts from the initial stack and adds the culprit of a
@@ -542,8 +567,8 @@ explicitly provided.)";
 		while (true)
 		{
 			auto scratch = *testConfig.initial;
-			TestStack stack(scratch, {});
-			auto const result = StackShuffler<StackManipulationCallbacks>::shuffle(
+			Stack<> stack(scratch, {});
+			auto const result = StackShuffler<NoOpStackManipulationCallbacks>::shuffle(
 				stack,
 				*testConfig.targetStackTop,
 				testConfig.targetStackTailSet,
@@ -555,13 +580,14 @@ explicitly provided.)";
 			)
 				break;
 			spillSet.spill(result.culprit.valueID());
+			spilledSlotList.push_back(result.culprit);
 		}
 
 	// Final shuffle with the (possibly pre-populated) spill set, recording the trace.
 	{
-		TraceRecorder trace(oss, *testConfig.targetStackTop, testConfig.targetStackTailSet, *testConfig.targetStackSize, spillSet);
+		TraceRecorder trace(oss, table, *testConfig.targetStackTop, testConfig.targetStackTailSetSlots, *testConfig.targetStackSize, spillSet);
 		trace.record("(initial)", *testConfig.initial);
-		TestStack stack(stackData, {.hook = [&](std::string const& op)
+		TestStack stack(stackData, {.table = table, .hook = [&](std::string const& op)
 		{
 			trace.record(op, stackData);
 		}});
@@ -582,7 +608,7 @@ explicitly provided.)";
 		oss << "Status: Admissible\n";
 		break;
 	case StackShufflerResult::Status::StackTooDeep:
-		oss << fmt::format("Status: StackTooDeep (culprit: {})\n", slotToString(shuffleResult.culprit));
+		oss << fmt::format("Status: StackTooDeep (culprit: {})\n", table.render(shuffleResult.culprit));
 		break;
 	case StackShufflerResult::Status::MaxIterationsReached:
 		oss << "Status: MaxIterationsReached\n";
@@ -594,9 +620,7 @@ explicitly provided.)";
 		oss << fmt::format(
 			"Spilled: {{{}}}\n",
 			fmt::join(
-				spillSet.spilledValues() | ranges::views::transform(
-					[](auto const& id) { return slotToString(StackSlot::makeValueID(id)); }
-				),
+				spilledSlotList | ranges::views::transform([&](StackSlot const& _slot) { return table.render(_slot); }),
 				", "
 			)
 		);
@@ -606,9 +630,9 @@ explicitly provided.)";
 		yulAssert(*testConfig.targetStackSize >= testConfig.targetStackTop->size());
 		auto const tailSize = *testConfig.targetStackSize - testConfig.targetStackTop->size();
 		yulAssert(stackData.size() == *testConfig.targetStackSize);
-		for (const auto& slot: testConfig.targetStackTailSet | ranges::views::keys)
+		for (auto const& slot: testConfig.targetStackTailSet | ranges::views::keys)
 		{
-			if (slot.isValueID() && spillSet.isSpilled(slot.valueID()))
+			if (spillSet.isSpilled(slot.valueID()))
 				continue;
 			auto const findIt = ranges::find(
 				stackData.begin(),

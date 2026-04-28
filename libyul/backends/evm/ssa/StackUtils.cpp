@@ -46,7 +46,7 @@ void GasAccumulatingCallbacks::push(StackSlot const& _slot)
 {
 	if (_slot.isLiteralValueID())
 	{
-		auto const size = numberEncodingSize(cfg.literalInfo(_slot.valueID()).value);
+		auto const size = numberEncodingSize(cfg.literalPayload(_slot.valueID().instId()));
 		opGas += evmasm::GasMeter::runGas(evmasm::pushInstruction(size), cfg.evmDialect.evmVersion());
 	}
 	else if (_slot.isJunk())
@@ -68,12 +68,15 @@ void GasAccumulatingCallbacks::pop()
 	opGas += evmasm::GasMeter::runGas(evmasm::Instruction::POP, cfg.evmDialect.evmVersion());
 }
 
-StackData solidity::yul::ssa::stackPreImage(StackData _stack, PhiInverse const& _phiInverse)
+StackData solidity::yul::ssa::stackPreImage(SSACFG const& _cfg, StackData _stack, PhiInverse const& _phiInverse)
 {
 	if (!_phiInverse.noOp())
 		for (auto& slot: _stack)
 			if (slot.isValueID())
-				slot = StackSlot::makeValueID(_phiInverse(slot.valueID()));
+			{
+				auto const preImage = _phiInverse(slot.valueID());
+				slot = StackSlot::makeValueID(_cfg, preImage);
+			}
 	return _stack;
 }
 
@@ -203,10 +206,14 @@ CallSites solidity::yul::ssa::gatherCallSites(SSACFG const& _cfg)
 			}
 		});
 
-		for (auto const opId: block.operations)
-			if (auto const* call = std::get_if<SSACFG::Call>(&_cfg.operation(opId).kind))
-				if (call->canContinue)
-					result.addCallSite(opId);
+		for (InstId const instId: block.instructions)
+		{
+			auto const& inst = _cfg.inst(instId);
+			if (inst.opcode != InstOpcode::Call)
+				continue;
+			if (_cfg.callPayload(instId).canContinue)
+				result.addCallSite(instId);
+		}
 	}
 	return result;
 }

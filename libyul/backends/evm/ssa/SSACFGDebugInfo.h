@@ -39,10 +39,7 @@ struct SSACFGDebugInfo
 		m_blockDebugData[_id.value] = std::move(_data);
 	}
 
-	langutil::DebugData::ConstPtr const& blockDebugData(BlockId _id) const
-	{
-		return getOrEmpty(m_blockDebugData, _id.value);
-	}
+	langutil::DebugData::ConstPtr blockDebugData(BlockId _id) const { return lookup(m_blockDebugData, _id.value); }
 
 	void setExitDebugData(BlockId _id, langutil::DebugData::ConstPtr _data)
 	{
@@ -51,22 +48,16 @@ struct SSACFGDebugInfo
 		m_exitDebugData[_id.value] = std::move(_data);
 	}
 
-	langutil::DebugData::ConstPtr const& exitDebugData(BlockId _id) const
-	{
-		return getOrEmpty(m_exitDebugData, _id.value);
-	}
+	langutil::DebugData::ConstPtr exitDebugData(BlockId _id) const { return lookup(m_exitDebugData, _id.value); }
 
-	void setOperationDebugData(InstId _id, langutil::DebugData::ConstPtr _data)
+	void setInstDebugData(InstId _id, langutil::DebugData::ConstPtr _data)
 	{
 		yulAssert(_id.hasValue());
-		ensureSize(m_operationDebugData, _id.value);
-		m_operationDebugData[_id.value] = std::move(_data);
+		ensureSize(m_instDebugData, _id.value);
+		m_instDebugData[_id.value] = std::move(_data);
 	}
 
-	langutil::DebugData::ConstPtr const& operationDebugData(InstId _id) const
-	{
-		return getOrEmpty(m_operationDebugData, _id.value);
-	}
+	langutil::DebugData::ConstPtr instDebugData(InstId _id) const { return lookup(m_instDebugData, _id.value); }
 
 	void setValueDebugData(ValueId _id, langutil::DebugData::ConstPtr _data)
 	{
@@ -74,12 +65,11 @@ struct SSACFGDebugInfo
 		m_valueDebugData[_id] = std::move(_data);
 	}
 
-	langutil::DebugData::ConstPtr const& valueDebugData(ValueId _id) const
+	langutil::DebugData::ConstPtr valueDebugData(ValueId _id) const
 	{
-		static langutil::DebugData::ConstPtr const empty{nullptr};
 		auto const it = m_valueDebugData.find(_id);
 		if (it == m_valueDebugData.end())
-			return empty;
+			return nullptr;
 		return it->second;
 	}
 
@@ -93,20 +83,14 @@ private:
 			_vec.resize(_index + 1);
 	}
 
-	static langutil::DebugData::ConstPtr const& getOrEmpty(
-		std::vector<langutil::DebugData::ConstPtr> const& _debugData,
-		std::size_t const _index
-	)
+	static langutil::DebugData::ConstPtr lookup(std::vector<langutil::DebugData::ConstPtr> const& _vec, std::size_t const _index)
 	{
-		static langutil::DebugData::ConstPtr const empty{nullptr};
-		if (_index >= _debugData.size())
-			return empty;
-		return _debugData[_index];
+		return _index < _vec.size() ? _vec[_index] : nullptr;
 	}
 
 	std::vector<langutil::DebugData::ConstPtr> m_blockDebugData;
 	std::vector<langutil::DebugData::ConstPtr> m_exitDebugData;
-	std::vector<langutil::DebugData::ConstPtr> m_operationDebugData;
+	std::vector<langutil::DebugData::ConstPtr> m_instDebugData;
 	std::map<ValueId, langutil::DebugData::ConstPtr> m_valueDebugData;
 };
 

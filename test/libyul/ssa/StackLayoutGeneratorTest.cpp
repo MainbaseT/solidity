@@ -78,32 +78,28 @@ protected:
 		_out << "\\\n";
 		_out << "IN: " << stackToString(blockLayout->stackIn) << "\\l\\\n";
 
-		for (std::size_t i = 0; i < block.operations.size(); ++i)
-		{
-			auto const& operation = m_cfg.operation(block.operations[i]);
+		std::size_t i = 0;
+		m_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const& inst) {
 			yulAssert(i < blockLayout->operationIn.size());
 			auto operationStack = blockLayout->operationIn[i];
 
 			_out << "\\l\\\n";
 			_out << stackToString(operationStack) << "\\l\\\n";
 
-			std::visit(GenericVisitor{
-				[&](SSACFG::Call const& _call) {
-					_out << escapeLabel(m_controlFlow.functionGraph(_call.graphID)->name);
-				},
-				[&](SSACFG::BuiltinCall const& _call) {
-					_out << escapeLabel(m_cfg.evmDialect.builtin(_call.builtin).name);
-				}
-			}, operation.kind);
+			if (inst.opcode == InstOpcode::Call)
+				_out << escapeLabel(m_controlFlow.functionGraph(m_cfg.callPayload(instId).graphID)->name);
+			else
+				_out << escapeLabel(m_cfg.evmDialect.builtin(m_cfg.builtinPayload(instId).builtin).name);
 			_out << "\\l\\\n";
 
-			yulAssert(operation.inputs.size() <= operationStack.size());
-			for (std::size_t j = 0; j < operation.inputs.size(); ++j)
+			yulAssert(inst.inputs.size() <= operationStack.size());
+			for (std::size_t j = 0; j < inst.inputs.size(); ++j)
 				operationStack.pop_back();
-			for (auto const& output: operation.outputs)
-				operationStack.push_back(StackSlot::makeValueID(output));
+			for (auto const& output: SSACFG::outputsOf(instId, inst.numOutputs))
+				operationStack.push_back(StackSlot::makeValueID(m_cfg, output));
 			_out << stackToString(operationStack) << "\\l\\\n";
-		}
+			++i;
+		});
 
 		_out << "\\l\\\n";
 		_out << "OUT: " << stackToString(blockLayout->exitIn) << "\\l\\\n";
