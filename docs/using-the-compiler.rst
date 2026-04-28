@@ -753,7 +753,7 @@ Note that the use of this mode is recorded in the metadata:
 - ``settings.experimental`` in JSON metadata is set to ``true``,
 
 .. note::
-    Prior to version 0.8.34, most of the experimental features were usable without any extra safeguards.
+    Prior to version 0.8.35, most of the experimental features were usable without any extra safeguards.
     Some were gated behind ``pragma experimental``, but this was not done consistently.
     The information about them was also only recorded in CBOR metadata and even then not always.
     The main goal of the experimental mode is to systematize this and make users fully aware when relying on features which are unfinished or not production-ready.
