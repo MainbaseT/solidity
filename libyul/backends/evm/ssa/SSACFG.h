@@ -145,6 +145,19 @@ public:
 	/// Returns the opcode category for a given ValueId.
 	InstOpcode kindOf(ValueId const _v) const { return m_instructions.kindOf(_v); }
 
+	bool isPhi(InstId const _id) const { return inst(_id).isPhi(); }
+	bool isPhi(ValueId const _v) const { return isPhi(_v.instId()); }
+	bool isUpsilon(InstId const _id) const { return inst(_id).isUpsilon(); }
+	bool isUpsilon(ValueId const _v) const { return isUpsilon(_v.instId()); }
+	bool isLiteral(InstId const _id) const { return inst(_id).isLiteral(); }
+	bool isLiteral(ValueId const _v) const { return isLiteral(_v.instId()); }
+	bool isUnreachable(InstId const _id) const { return inst(_id).isUnreachable(); }
+	bool isUnreachable(ValueId const _v) const { return isUnreachable(_v.instId()); }
+	bool isFunctionArg(InstId const _id) const { return inst(_id).isFunctionArg(); }
+	bool isFunctionArg(ValueId const _v) const { return isFunctionArg(_v.instId()); }
+	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
+	bool isOperation(ValueId const _v) const { return isOperation(_v.instId()); }
+
 	/// Returns the phi targeted by an Upsilon Inst.
 	ValueId upsilonPhi(InstId const _id) const { return m_instructions.upsilonPhi(_id); }
 

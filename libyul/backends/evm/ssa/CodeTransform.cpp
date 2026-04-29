@@ -404,7 +404,7 @@ void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlo
 	// Find the last BuiltinCall/Call Inst in the block.
 	InstId lastOpInstId{};
 	for (InstId const instId: block.instructions | ranges::views::reverse)
-		if (m_cfg.inst(instId).isOperation())
+		if (m_cfg.isOperation(instId))
 		{
 			lastOpInstId = instId;
 			break;

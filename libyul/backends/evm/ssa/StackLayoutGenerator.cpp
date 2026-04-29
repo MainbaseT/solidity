@@ -312,7 +312,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 
 				yulAssert(!stack.empty() && stack.top().isValueID() && stack.top().valueID() == _cJump.condition);
 				yulAssert(ranges::none_of(m_cfg.block(_cJump.nonZero).instructions, [this](InstId const _id) {
-					return m_cfg.inst(_id).isPhi();
+					return m_cfg.isPhi(_id);
 				}));
 
 				// exitIn = pre-JUMPI state (condition on top) for CodeTransform

@@ -55,7 +55,7 @@ private:
 
 	auto excludingLiteralsFilter() const
 	{
-		return [this](SSACFG::ValueId _v) { return !m_cfg.inst(_v.instId()).isLiteral(); };
+		return [this](SSACFG::ValueId _v) { return !m_cfg.isLiteral(_v); };
 	}
 
 	SSACFG const& m_cfg;

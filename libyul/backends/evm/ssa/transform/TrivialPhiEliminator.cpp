@@ -77,7 +77,7 @@ private:
 			auto& block = cfg.block(blockId);
 			std::erase_if(block.instructions, [this](InstId const _id) {
 				auto const& inst = cfg.inst(_id);
-				return inst.isUpsilon() && cfg.inst(inst.inputs.at(0).instId()).isUnreachable();
+				return inst.isUpsilon() && cfg.isUnreachable(inst.inputs.at(0));
 			});
 		}
 	}
@@ -99,7 +99,7 @@ private:
 					reversePhiUpsilonValues.resize(phiIdx + 1);
 				upsilonValuesForPhi[phiIdx].push_back(value);
 				phiTargetBlocks[phiIdx].push_back(blockId);
-				if (cfg.inst(value.instId()).isPhi())
+				if (cfg.isPhi(value))
 				{
 					auto const valIdx = value.instId().value;
 					if (valIdx >= reversePhiUpsilonValues.size())
@@ -120,7 +120,7 @@ private:
 		auto const unreachable = cfg.unreachableValue();
 		for (auto& upsilonValues: upsilonValuesForPhi)
 			for (auto& val: upsilonValues)
-				if (cfg.inst(val.instId()).isPhi())
+				if (cfg.isPhi(val))
 				{
 					auto const idx = val.instId().value;
 					bool const hasUpsilons = idx < upsilonValuesForPhi.size() && !upsilonValuesForPhi[idx].empty();
@@ -158,7 +158,7 @@ private:
 			for (auto const arg: upsilonValuesForPhi[phiIdx])
 			{
 				auto const resolved = canonicalize(arg);
-				if (resolved == same || resolved == _phi || cfg.inst(resolved.instId()).isUnreachable())
+				if (resolved == same || resolved == _phi || cfg.isUnreachable(resolved))
 					continue;
 				if (same.hasValue())
 					return; // non-trivial
@@ -172,7 +172,7 @@ private:
 		// remove the phi from its defining block
 		{
 			auto& block = cfg.block(cfg.inst(_phi.instId()).block);
-			yulAssert(cfg.inst(_phi.instId()).isPhi());
+			yulAssert(cfg.isPhi(_phi));
 			std::erase(block.instructions, _phi.instId());
 		}
 
@@ -197,7 +197,7 @@ private:
 								inst.inputs[0] = same;
 						});
 				// maintain reverse index
-				if (cfg.inst(same.instId()).isPhi())
+				if (cfg.isPhi(same))
 				{
 					if (same.instId().value >= reversePhiUpsilonValues.size())
 						reversePhiUpsilonValues.resize(same.instId().value + 1);

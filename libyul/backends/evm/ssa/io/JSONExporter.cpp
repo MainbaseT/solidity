@@ -96,7 +96,7 @@ Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const
 	}
 	blockJson["instructions"] = Json::array();
 	bool const hasPhis = ranges::any_of(block.instructions, [&](InstId id) {
-		return _cfg.inst(id).isPhi();
+		return _cfg.isPhi(id);
 	});
 	if (hasPhis)
 		blockJson["entries"] = block.entries

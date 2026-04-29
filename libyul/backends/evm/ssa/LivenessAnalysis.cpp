@@ -84,8 +84,8 @@ void LivenessAnalysis::runDagDfs()
 		LivenessData live{};
 		m_cfg.forEachUpsilon(block, [&](InstId, SSACFG::Inst const& inst) {
 			SSACFG::ValueId const v = inst.inputs.at(0);
-			yulAssert(!m_cfg.inst(v.instId()).isUnreachable());
-			if (!m_cfg.inst(v.instId()).isLiteral())
+			yulAssert(!m_cfg.isUnreachable(v));
+			if (!m_cfg.isLiteral(v))
 				live.insert(v);
 		});
 
@@ -107,7 +107,7 @@ void LivenessAnalysis::runDagDfs()
 			live.insertAll(std::get<SSACFG::BasicBlock::FunctionReturn>(block.exit).returnValues | ranges::views::filter(excludingLiteralsFilter()));
 
 		// clean out unreachables
-		live.eraseIf([&](auto const& _entry) { return m_cfg.inst(_entry.first.instId()).isUnreachable(); });
+		live.eraseIf([&](auto const& _entry) { return m_cfg.isUnreachable(_entry.first); });
 
 		// LiveOut(B) <- live
 		m_liveOuts[blockId.value] = live;
@@ -171,7 +171,7 @@ void LivenessAnalysis::fillOperationsLiveOut()
 		auto const& block = m_cfg.block(blockId);
 		auto const opCount = static_cast<std::size_t>(ranges::count_if(
 			block.instructions,
-			[&](InstId const _id) { return m_cfg.inst(_id).isOperation(); }
+			[&](InstId const _id) { return m_cfg.isOperation(_id); }
 		));
 		auto& liveOuts = m_operationLiveOuts[blockId.value];
 		liveOuts.resize(opCount);

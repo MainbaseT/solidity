@@ -546,7 +546,7 @@ void SSACFGBuilder::addPhiOperands(Scope::Variable const& _variable, SSACFG::Val
 
 void SSACFGBuilder::emitUpsilon(SSACFG::BlockId _block, SSACFG::ValueId _value, SSACFG::ValueId _phi)
 {
-	yulAssert(m_graph.inst(_phi.instId()).isPhi());
+	yulAssert(m_graph.isPhi(_phi));
 	m_graph.emitUpsilon(_block, _value, _phi);
 }
 

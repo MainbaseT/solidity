@@ -52,7 +52,7 @@ struct AssemblyCallbacks
 		case StackSlot::Kind::ValueID:
 		{
 			auto const id = _slot.valueID();
-			yulAssert(cfg->inst(id.instId()).isLiteral(), fmt::format("Tried bringing up non-const {}", id));
+			yulAssert(cfg->isLiteral(id), fmt::format("Tried bringing up non-const {}", id));
 			assembly->appendConstant(cfg->literalPayload(id.instId()));
 			return;
 		}
