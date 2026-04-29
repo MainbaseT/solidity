@@ -20,23 +20,13 @@
 
 #include <libsolutil/Visitor.h>
 
+#include <range/v3/algorithm/count_if.hpp>
 #include <range/v3/range/conversion.hpp>
 
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/reverse.hpp>
 
 using namespace solidity::yul::ssa;
-
-namespace
-{
-constexpr auto excludingLiteralsFilter()
-{
-	return [](SSACFG::ValueId const& _valueId) -> bool
-	{
-		return !_valueId.isLiteral();
-	};
-}
-}
 
 LivenessAnalysis::LivenessData LivenessAnalysis::blockExitValues(SSACFG::BlockId const& _blockId) const
 {
@@ -45,8 +35,7 @@ LivenessAnalysis::LivenessData LivenessAnalysis::blockExitValues(SSACFG::BlockId
 		[](SSACFG::BasicBlock::MainExit const&) {},
 		[&](SSACFG::BasicBlock::FunctionReturn const& _functionReturn)
 		{
-			for (auto const& valueId: _functionReturn.returnValues | ranges::views::filter(excludingLiteralsFilter()))
-				result.insert(valueId);
+			result.insertAll(_functionReturn.returnValues | ranges::views::filter(excludingLiteralsFilter()));
 		},
 		[](SSACFG::BasicBlock::Jump const&) {},
 		[&](SSACFG::BasicBlock::ConditionalJump const& _conditionalJump)
@@ -93,12 +82,12 @@ void LivenessAnalysis::runDagDfs()
 
 		// live <- PhiUses(B)
 		LivenessData live{};
-		for (auto const& upsilon: block.upsilons)
-		{
-			yulAssert(!upsilon.value.isUnreachable());
-			if (!upsilon.value.isLiteral())
-				live.insert(upsilon.value);
-		}
+		m_cfg.forEachUpsilon(block, [&](InstId, SSACFG::Inst const& inst) {
+			SSACFG::ValueId const v = inst.inputs.at(0);
+			yulAssert(!m_cfg.isUnreachable(v));
+			if (!m_cfg.isLiteral(v))
+				live.insert(v);
+		});
 
 		// for each S \in succs(B) s.t. (B, S) not a back edge: live <- live \cup (LiveIn(S) - PhiDefs(S))
 		block.forEachExit(
@@ -107,18 +96,18 @@ void LivenessAnalysis::runDagDfs()
 				{
 					// LiveIn(S) - PhiDefs(S)
 					auto liveInWithoutPhiDefs = m_liveIns[_successor.value];
-					for (auto const& phiId: m_cfg.block(_successor).phis)
-						liveInWithoutPhiDefs.erase(phiId);
+					m_cfg.forEachPhi(m_cfg.block(_successor), [&](InstId const succInstId, SSACFG::Inst const&) {
+						liveInWithoutPhiDefs.erase(ValueId{succInstId});
+					});
 					live.maxUnion(liveInWithoutPhiDefs);
 				}
 			});
 
 		if (std::holds_alternative<SSACFG::BasicBlock::FunctionReturn>(block.exit))
-			for (auto const& returnValue: std::get<SSACFG::BasicBlock::FunctionReturn>(block.exit).returnValues | ranges::views::filter(excludingLiteralsFilter()))
-				live.insert(returnValue);
+			live.insertAll(std::get<SSACFG::BasicBlock::FunctionReturn>(block.exit).returnValues | ranges::views::filter(excludingLiteralsFilter()));
 
 		// clean out unreachables
-		live.eraseIf([&](auto const& _entry) { return _entry.first.isUnreachable(); });
+		live.eraseIf([&](auto const& _entry) { return m_cfg.isUnreachable(_entry.first); });
 
 		// LiveOut(B) <- live
 		m_liveOuts[blockId.value] = live;
@@ -128,19 +117,22 @@ void LivenessAnalysis::runDagDfs()
 			// add value ids to the live set that are used in exit blocks
 			live += blockExitValues(blockId);
 
-			for (auto const opId: block.operations | ranges::views::reverse)
+			for (InstId const instId: block.instructions | ranges::views::reverse)
 			{
-				auto const& op = m_cfg.operation(opId);
+				auto const& inst = m_cfg.inst(instId);
+				if (!inst.isOperation())
+					continue;
 				// remove variables defined at p from live
-				live.eraseAll(op.outputs | ranges::views::filter(excludingLiteralsFilter()) | ranges::to<std::vector>);
+				live.eraseAll(SSACFG::outputsOf(instId, inst.numOutputs) | ranges::views::filter(excludingLiteralsFilter()));
 				// add uses at p to live
-				live.insertAll(op.inputs | ranges::views::filter(excludingLiteralsFilter()) | ranges::to<std::vector>);
+				live.insertAll(inst.inputs | ranges::views::filter(excludingLiteralsFilter()));
 			}
 		}
 
 		// livein(b) <- live \cup PhiDefs(B)
-		for (auto const& phi: block.phis)
-			live.insert(phi);
+		m_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
+			live.insert(ValueId{instId});
+		});
 		m_liveIns[blockId.value] = live;
 	}
 }
@@ -154,8 +146,9 @@ void LivenessAnalysis::runLoopTreeDfs(SSACFG::BlockId::ValueType const _loopHead
 		auto const& block = m_cfg.block(SSACFG::BlockId{_loopHeader});
 		// LiveLoop <- LiveIn(B_N) - PhiDefs(B_N)
 		auto liveLoop = m_liveIns[_loopHeader];
-		for (auto const& phi: block.phis)
-			liveLoop.erase(phi);
+		m_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
+			liveLoop.erase(ValueId{instId});
+		});
 		// must be live out of header if live in of children
 		m_liveOuts[_loopHeader].maxUnion(liveLoop);
 		// for each blockId \in children(loopHeader)
@@ -175,22 +168,26 @@ void LivenessAnalysis::fillOperationsLiveOut()
 {
 	for (SSACFG::BlockId blockId{0}; blockId.value < m_cfg.numBlocks(); ++blockId.value)
 	{
-		auto const& operations = m_cfg.block(blockId).operations;
+		auto const& block = m_cfg.block(blockId);
+		auto const opCount = static_cast<std::size_t>(ranges::count_if(
+			block.instructions,
+			[&](InstId const _id) { return m_cfg.isOperation(_id); }
+		));
 		auto& liveOuts = m_operationLiveOuts[blockId.value];
-		liveOuts.resize(operations.size());
-		if (!operations.empty())
+		liveOuts.resize(opCount);
+		if (opCount > 0)
 		{
 			auto live = m_liveOuts[blockId.value];
 			live += blockExitValues(blockId);
 			auto rit = liveOuts.rbegin();
-			for (auto const opId: operations | ranges::views::reverse)
+			for (InstId const instId: block.instructions | ranges::views::reverse)
 			{
-				auto const& op = m_cfg.operation(opId);
+				auto const& inst = m_cfg.inst(instId);
+				if (!inst.isOperation())
+					continue;
 				*rit = live;
-				for (auto const& output: op.outputs | ranges::views::filter(excludingLiteralsFilter()))
-					live.erase(output);
-				for (auto const& input: op.inputs | ranges::views::filter(excludingLiteralsFilter()))
-					live.insert(input);
+				live.eraseAll(SSACFG::outputsOf(instId, inst.numOutputs) | ranges::views::filter(excludingLiteralsFilter()));
+				live.insertAll(inst.inputs | ranges::views::filter(excludingLiteralsFilter()));
 				++rit;
 			}
 		}

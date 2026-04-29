@@ -53,6 +53,11 @@ private:
 	void fillOperationsLiveOut();
 	LivenessData blockExitValues(SSACFG::BlockId const& _blockId) const;
 
+	auto excludingLiteralsFilter() const
+	{
+		return [this](SSACFG::ValueId _v) { return !m_cfg.isLiteral(_v); };
+	}
+
 	SSACFG const& m_cfg;
 	traversal::ForwardTopologicalSort m_topologicalSort;
 	SSACFGLoopNestingForest m_loopNestingForest;

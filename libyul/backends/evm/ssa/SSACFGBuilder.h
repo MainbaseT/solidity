@@ -90,7 +90,7 @@ public:
 
 private:
 	void assign(std::vector<std::reference_wrapper<Scope::Variable const>> _variables, Expression const* _expression);
-	std::vector<SSACFG::ValueId> visitFunctionCall(FunctionCall const& _call);
+	InstId visitFunctionCall(FunctionCall const& _call);
 	void registerFunctionDefinition(FunctionDefinition const& _functionDefinition);
 	void buildFunctionGraph(Scope::Function const* _function, FunctionDefinition const* _functionDefinition);
 

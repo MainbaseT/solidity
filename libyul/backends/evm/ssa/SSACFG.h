@@ -35,6 +35,7 @@
 #include <libsolutil/Numeric.h>
 
 #include <concepts>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -63,21 +64,11 @@ public:
 	~SSACFG() = default;
 
 	using BlockId = ssa::BlockId;
-	using InstId = ssa::InstId;
 	using ValueId = ssa::ValueId;
 
 	using BuiltinCall = InstructionStore::BuiltinCall;
 	using Call = InstructionStore::Call;
-	using Operation = InstructionStore::Operation;
-
-	/// Upsilon records a phi pre-image at a block exit.
-	/// Upsilon(value, phi) means: the value flowing into `phi` from this block is `value`.
-	/// Lives in the predecessor block; the corresponding Phi lives in the successor.
-	struct Upsilon
-	{
-		ValueId value;  ///< pre-image value for the phi
-		ValueId phi;    ///< target phi
-	};
+	using Inst = InstructionStore::Inst;
 
 	struct BasicBlock
 	{
@@ -98,11 +89,7 @@ public:
 		};
 		struct Terminated {};
 		std::vector<BlockId> entries;
-		std::vector<ValueId> phis;
-		std::vector<InstId> operations;
-		/// Upsilon assignments placed at the block exit (before the terminator).
-		/// They record the phi pre-images for successor blocks.
-		std::vector<Upsilon> upsilons;
+		std::vector<InstId> instructions;
 		std::variant<MainExit, Jump, ConditionalJump, FunctionReturn, Terminated> exit = MainExit{};
 
 		template<std::invocable<BlockId> Callable>
@@ -128,7 +115,7 @@ public:
 		// max itself is reserved for the 'empty' block
 		yulAssert(m_blocks.size() < std::numeric_limits<BlockId::ValueType>::max());
 		BlockId const blockId{static_cast<BlockId::ValueType>(m_blocks.size())};
-		m_blocks.emplace_back(BasicBlock{{}, {}, {}, {}, BasicBlock::Terminated{}});
+		m_blocks.emplace_back(BasicBlock{{}, {}, BasicBlock::Terminated{}});
 		if (debugInfo)
 			debugInfo->setBlockDebugData(blockId, std::move(_debugData));
 		return blockId;
@@ -140,46 +127,132 @@ public:
 	InstructionStore& instructionStore() { return m_instructions; }
 	InstructionStore const& instructionStore() const { return m_instructions; }
 
-	Operation& operation(InstId _id) { return m_instructions.operation(_id); }
-	Operation const& operation(InstId _id) const { return m_instructions.operation(_id); }
+	Inst& inst(InstId _id) { return m_instructions.inst(_id); }
+	Inst const& inst(InstId _id) const { return m_instructions.inst(_id); }
+	size_t numInsts() const { return m_instructions.numInsts(); }
+	std::vector<Inst> const& instructions() const { return m_instructions.instructions(); }
 
-	InstructionStore::LiteralValue const& literalInfo(ValueId const& _valueId) const { return m_instructions.literalInfo(_valueId); }
-	InstructionStore::PhiValue const& phiInfo(ValueId const& _valueId) const { return m_instructions.phiInfo(_valueId); }
-	InstructionStore::PhiValue& phiInfo(ValueId const& _valueId) { return m_instructions.phiInfo(_valueId); }
-	InstructionStore::VariableValue const& variableInfo(ValueId const& _valueId) const { return m_instructions.variableInfo(_valueId); }
+	static auto outputsOf(InstId const _id, ValueId::OutputSize const _numOutputs)
+	{
+		return InstructionStore::outputsOf(_id, _numOutputs);
+	}
 
+	auto instOutputs(InstId const _id) const
+	{
+		return m_instructions.instOutputs(_id);
+	}
+
+	/// Returns the opcode category for a given ValueId.
+	InstOpcode kindOf(ValueId const _v) const { return m_instructions.kindOf(_v); }
+
+	bool isPhi(InstId const _id) const { return inst(_id).isPhi(); }
+	bool isPhi(ValueId const _v) const { return isPhi(_v.instId()); }
+	bool isUpsilon(InstId const _id) const { return inst(_id).isUpsilon(); }
+	bool isUpsilon(ValueId const _v) const { return isUpsilon(_v.instId()); }
+	bool isLiteral(InstId const _id) const { return inst(_id).isLiteral(); }
+	bool isLiteral(ValueId const _v) const { return isLiteral(_v.instId()); }
+	bool isUnreachable(InstId const _id) const { return inst(_id).isUnreachable(); }
+	bool isUnreachable(ValueId const _v) const { return isUnreachable(_v.instId()); }
+	bool isFunctionArg(InstId const _id) const { return inst(_id).isFunctionArg(); }
+	bool isFunctionArg(ValueId const _v) const { return isFunctionArg(_v.instId()); }
+	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
+	bool isOperation(ValueId const _v) const { return isOperation(_v.instId()); }
+
+	/// Returns the phi targeted by an Upsilon Inst.
+	ValueId upsilonPhi(InstId const _id) const { return m_instructions.upsilonPhi(_id); }
+
+	/// Returns the u256 payload of a Const Inst.
+	u256 const& literalPayload(InstId const _id) const { return m_instructions.literalPayload(_id); }
+
+	BuiltinCall const& builtinPayload(InstId const _id) const { return m_instructions.builtinPayload(_id); }
+
+	Call const& callPayload(InstId const _id) const { return m_instructions.callPayload(_id); }
+
+	/// Creates a Phi Inst in the given block and returns its output ValueId.
 	ValueId newPhi(BlockId const _definingBlock)
 	{
-		auto const id = m_instructions.newPhi(_definingBlock);
+		InstId const id = scheduleInBlock(m_instructions.appendPhi(_definingBlock), _definingBlock);
+		ValueId const v{id};
 		if (debugInfo)
-			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(_definingBlock));
-		return id;
+			debugInfo->setValueDebugData(v, debugInfo->blockDebugData(_definingBlock));
+		return v;
 	}
 
-	ValueId newVariable(BlockId const _definingBlock)
+	ValueId newFunctionArgument()
 	{
-		auto const id = m_instructions.newVariable(_definingBlock);
+		InstId const id = scheduleInBlock(m_instructions.appendFunctionArg(entry), entry);
+		ValueId const v{id};
 		if (debugInfo)
-			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(_definingBlock));
-		return id;
+			debugInfo->setValueDebugData(v, debugInfo->blockDebugData(entry));
+		return v;
 	}
 
-	ValueId unreachableValue() { return m_instructions.unreachableValue(); }
+	ValueId unreachableValue()
+	{
+		return ValueId{m_instructions.appendUnreachable()};
+	}
 
+	/// Literal ValueIds are deduplicated. Const Insts are pinned to the entry block.
 	ValueId newLiteral(langutil::DebugData::ConstPtr _debugData, u256 _value)
 	{
-		auto const [id, allocated] = m_instructions.newLiteral(std::move(_value));
-		if (debugInfo && allocated)
-			debugInfo->setValueDebugData(id, std::move(_debugData));
+		auto const beforeCount = m_instructions.numInsts();
+		InstId const id = m_instructions.appendLiteral(entry, std::move(_value));
+		ValueId const v{id};
+		// Newly allocated (not deduplicated): schedule in entry and attach debug data.
+		if (m_instructions.numInsts() > beforeCount)
+		{
+			scheduleInBlock(id, entry);
+			if (debugInfo)
+				debugInfo->setValueDebugData(v, std::move(_debugData));
+		}
+		return v;
+	}
+
+	InstId makeBuiltinCall(
+		BlockId const _block,
+		BuiltinCall _payload,
+		std::vector<ValueId> _inputs,
+		std::size_t const _numOutputs,
+		langutil::DebugData::ConstPtr _debugData = {}
+	)
+	{
+		yulAssert(
+			_numOutputs <= ValueId::maxOutputs,
+			fmt::format("SSA CFG: BuiltinCall with {} outputs exceeds the maximum of {}.", _numOutputs, ValueId::maxOutputs)
+		);
+		InstId const id = scheduleInBlock(
+			m_instructions.appendBuiltinCall(_block, std::move(_payload), std::move(_inputs), _numOutputs),
+			_block
+		);
+		if (debugInfo && _debugData)
+			debugInfo->setInstDebugData(id, std::move(_debugData));
 		return id;
 	}
 
-	InstId makeOperation(BlockId _block, Operation _op, langutil::DebugData::ConstPtr _debugData = {})
+	InstId makeCall(
+		BlockId const _block,
+		Call _payload,
+		std::vector<ValueId> _inputs,
+		std::size_t const _numOutputs,
+		langutil::DebugData::ConstPtr _debugData = {}
+	)
 	{
-		auto const id = m_instructions.makeOperation(_block, std::move(_op));
-		if (debugInfo)
-			debugInfo->setOperationDebugData(id, std::move(_debugData));
+		yulAssert(
+			_numOutputs <= ValueId::maxOutputs,
+			fmt::format("SSA CFG: Call with {} outputs exceeds the maximum of {}.", _numOutputs, ValueId::maxOutputs)
+		);
+		InstId const id = scheduleInBlock(
+			m_instructions.appendCall(_block, std::move(_payload), std::move(_inputs), _numOutputs),
+			_block
+		);
+		if (debugInfo && _debugData)
+			debugInfo->setInstDebugData(id, std::move(_debugData));
 		return id;
+	}
+
+	InstId emitUpsilon(BlockId const _block, ValueId _value, ValueId const _phi)
+	{
+		return scheduleInBlock(m_instructions.appendUpsilon(_block, _value, _phi), _block);
 	}
 
 	std::string toDot(
@@ -190,6 +263,12 @@ public:
 	) const;
 
 private:
+	InstId scheduleInBlock(InstId const _id, BlockId const _block)
+	{
+		m_blocks.at(_block.value).instructions.push_back(_id);
+		return _id;
+	}
+
 	std::vector<BasicBlock> m_blocks;
 	InstructionStore m_instructions;
 public:
@@ -203,6 +282,57 @@ public:
 	std::size_t numReturns = 0;
 
 	bool isMainGraph() const { return name.empty(); }
+
+	/// Iterates `_block.instructions`, invoking `_fn(instId, inst)` for every Phi.
+	template<typename Callable>
+	void forEachPhi(BasicBlock const& _block, Callable&& _fn)
+	{
+		forEachInstWhere(*this, _block, &Inst::isPhi, std::forward<Callable>(_fn));
+	}
+	template<typename Callable>
+	void forEachPhi(BasicBlock const& _block, Callable&& _fn) const
+	{
+		forEachInstWhere(*this, _block, &Inst::isPhi, std::forward<Callable>(_fn));
+	}
+
+	/// Iterates `_block.instructions`, invoking `_fn(instId, inst)` for every Upsilon.
+	template<typename Callable>
+	void forEachUpsilon(BasicBlock const& _block, Callable&& _fn)
+	{
+		forEachInstWhere(*this, _block, &Inst::isUpsilon, std::forward<Callable>(_fn));
+	}
+	template<typename Callable>
+	void forEachUpsilon(BasicBlock const& _block, Callable&& _fn) const
+	{
+		forEachInstWhere(*this, _block, &Inst::isUpsilon, std::forward<Callable>(_fn));
+	}
+
+	/// Iterates `_block.instructions`, invoking `_fn(instId, inst)` for every operation
+	/// (Call or BuiltinCall).
+	template<typename Callable>
+	void forEachOperation(BasicBlock const& _block, Callable&& _fn)
+	{
+		forEachInstWhere(*this, _block, &Inst::isOperation, std::forward<Callable>(_fn));
+	}
+	template<typename Callable>
+	void forEachOperation(BasicBlock const& _block, Callable&& _fn) const
+	{
+		forEachInstWhere(*this, _block, &Inst::isOperation, std::forward<Callable>(_fn));
+	}
+
+private:
+	/// Shared implementation for the public `forEach*` overloads; works for both
+	/// `SSACFG&` and `SSACFG const&` since `_self.inst(id)` propagates const-ness.
+	template<typename Self, typename Pred, typename Callable>
+	static void forEachInstWhere(Self& _self, BasicBlock const& _block, Pred _pred, Callable&& _fn)
+	{
+		for (InstId const id: _block.instructions)
+		{
+			auto& inst = _self.inst(id);
+			if (std::invoke(_pred, inst))
+				_fn(id, inst);
+		}
+	}
 };
 
 }

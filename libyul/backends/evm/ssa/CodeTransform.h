@@ -52,8 +52,8 @@ struct AssemblyCallbacks
 		case StackSlot::Kind::ValueID:
 		{
 			auto const id = _slot.valueID();
-			yulAssert(id.isLiteral(), fmt::format("Tried bringing up v{}", id.value()));
-			assembly->appendConstant(cfg->literalInfo(id).value);
+			yulAssert(cfg->isLiteral(id), fmt::format("Tried bringing up non-const {}", id));
+			assembly->appendConstant(cfg->literalPayload(id.instId()));
 			return;
 		}
 		case StackSlot::Kind::Junk:
@@ -66,9 +66,9 @@ struct AssemblyCallbacks
 		}
 		case StackSlot::Kind::FunctionCallReturnLabel:
 		{
-			auto const opId = callSites->operationId(_slot.functionCallReturnLabel());
-			yulAssert(returnLabels->count(opId), "FunctionCallReturnLabel not pre-registered before shuffle.");
-			assembly->appendLabelReference(returnLabels->at(opId));
+			auto const instId = callSites->instId(_slot.functionCallReturnLabel());
+			yulAssert(returnLabels->count(instId), "FunctionCallReturnLabel not pre-registered before shuffle.");
+			assembly->appendLabelReference(returnLabels->at(instId));
 			return;
 		}
 		case StackSlot::Kind::FunctionReturnLabel:
@@ -86,7 +86,7 @@ struct AssemblyCallbacks
 	SSACFG const* cfg{};
 	AbstractAssembly* assembly{};
 	CallSites const* callSites{};
-	std::map<SSACFG::InstId, AbstractAssembly::LabelID> const* returnLabels{};
+	std::map<InstId, AbstractAssembly::LabelID> const* returnLabels{};
 };
 static_assert(StackManipulationCallbackConcept<AssemblyCallbacks>);
 
@@ -118,7 +118,7 @@ private:
 		ControlFlowGraphs::FunctionGraphID _graphID);
 
 	void operator()(SSACFG::BlockId _blockId);
-	void operator()(SSACFG::InstId _opId, StackData const& _operationInputLayout);
+	void operator()(InstId _instId, StackData const& _operationInputLayout);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::MainExit const& _mainExit);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::ConditionalJump const& _conditionalJump);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::Jump const& _jump);
@@ -141,7 +141,7 @@ private:
 	AssemblyCallbacks m_assemblyCallbacks;
 	StackData m_stackData;
 	Stack<AssemblyCallbacks> m_stack;
-	std::map<SSACFG::InstId, AbstractAssembly::LabelID> m_returnLabels;
+	std::map<InstId, AbstractAssembly::LabelID> m_returnLabels;
 };
 
 }

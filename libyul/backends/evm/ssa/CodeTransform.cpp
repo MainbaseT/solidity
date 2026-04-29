@@ -162,7 +162,7 @@ CodeTransform::CodeTransform(
 	if (isFunctionGraph && m_cfg.canContinue)
 		expectedStackTop.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
 	for (auto const& valueID: m_cfg.arguments | ranges::views::reverse)
-		expectedStackTop.push_back(StackSlot::makeValueID(valueID));
+		expectedStackTop.push_back(StackSlot::makeValueID(_cfg, valueID));
 	assertLayoutCompatibility(m_stack.data(), expectedStackTop);
 }
 
@@ -179,15 +179,15 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
 
 	auto const& block = m_cfg.block(_blockId);
-	yulAssert(block.operations.size() == blockLayout->operationIn.size(), "We need as many operation stack layouts as we have operations");
 
-	for (std::size_t operationIndex = 0; operationIndex < block.operations.size(); ++operationIndex)
-	{
+	std::size_t operationIndex = 0;
+	m_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const&) {
+		yulAssert(operationIndex < blockLayout->operationIn.size());
 		auto const& operationInLayout = blockLayout->operationIn[operationIndex];
-
-		// perform the operation
-		(*this)(block.operations[operationIndex], operationInLayout);
-	}
+		(*this)(instId, operationInLayout);
+		++operationIndex;
+	});
+	yulAssert(operationIndex == blockLayout->operationIn.size());
 
 	// Shuffle to the block's exit layout before dispatching the exit.
 	// This ensures the condition is on top for ConditionalJump, phi pre-images are
@@ -199,16 +199,16 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 	std::visit(solidity::util::GenericVisitor{ [this, &_blockId](auto const& exit) { (*this)(_blockId, exit); } }, block.exit);
 }
 
-void CodeTransform::operator()(SSACFG::InstId _opId, StackData const& _operationInputLayout)
+void CodeTransform::operator()(InstId _instId, StackData const& _operationInputLayout)
 {
-	SSACFG::Operation const& _operation = m_cfg.operation(_opId);
-	bool const hasReturnLabel =
-			std::holds_alternative<SSACFG::Call>(_operation.kind) &&
-			std::get<SSACFG::Call>(_operation.kind).canContinue;
+	SSACFG::Inst const& _inst = m_cfg.inst(_instId);
+	yulAssert(_inst.isOperation());
+	bool const isCall = _inst.opcode == InstOpcode::Call;
+	bool const hasReturnLabel = isCall && m_cfg.callPayload(_instId).canContinue;
 
 	if (hasReturnLabel)
 	{
-		auto const [it, inserted] = m_returnLabels.try_emplace(_opId, 0);
+		auto const [it, inserted] = m_returnLabels.try_emplace(_instId, 0);
 		yulAssert(inserted, "Call sites should be unique.");
 		it->second = m_assembly.newLabelId();
 	}
@@ -229,86 +229,94 @@ void CodeTransform::operator()(SSACFG::InstId _opId, StackData const& _operation
 	assertLayoutCompatibility(m_stack.data(), _operationInputLayout);
 
 	// Assert that we have the inputs of the operation on stack top.
-	yulAssert(m_stack.size() >= _operation.inputs.size());
+	yulAssert(m_stack.size() >= _inst.inputs.size());
 	for (auto const& [stackEntry, input]: ranges::views::zip(
-		m_stack | ranges::views::take_last(_operation.inputs.size()),
-		_operation.inputs
+		m_stack | ranges::views::take_last(_inst.inputs.size()),
+		_inst.inputs
 	))
 		yulAssert(stackEntry.isValueID() && stackEntry.valueID() == input);
 
 	// if the function can continue (doesn't always abort), make sure we have the correct return label slot in place
 	if (hasReturnLabel)
 	{
-		yulAssert(m_stack.size() > _operation.inputs.size());
-		auto const returnLabelSlot = m_stack.slot(StackDepth{_operation.inputs.size()});
-		yulAssert(std::holds_alternative<SSACFG::Call>(_operation.kind));
+		yulAssert(m_stack.size() > _inst.inputs.size());
+		auto const returnLabelSlot = m_stack.slot(StackDepth{_inst.inputs.size()});
+		yulAssert(isCall);
 		yulAssert(
 			returnLabelSlot.isFunctionCallReturnLabel() &&
-			m_callSites.operationId(returnLabelSlot.functionCallReturnLabel()) == _opId
+			m_callSites.instId(returnLabelSlot.functionCallReturnLabel()) == _instId
 		);
 	}
 
 	// height of the stack sans function return label and operation inputs
-	std::size_t const baseHeight = m_stack.size() - _operation.inputs.size() - (hasReturnLabel ? 1 : 0);
+	std::size_t const baseHeight = m_stack.size() - _inst.inputs.size() - (hasReturnLabel ? 1 : 0);
 
 	auto const opOriginLocation = [&]() -> langutil::SourceLocation {
 		if (m_cfg.debugInfo)
-			if (auto const& dbg = m_cfg.debugInfo->operationDebugData(_opId))
+			if (auto const& dbg = m_cfg.debugInfo->instDebugData(_instId))
 				return dbg->originLocation;
 		return {};
 	}();
 
 	// generate code for the operation
-	std::visit(solidity::util::GenericVisitor{
-		[&](SSACFG::BuiltinCall const& _builtin) {
-			m_assembly.setSourceLocation(opOriginLocation);
-			auto const& builtin = m_cfg.evmDialect.builtin(_builtin.builtin);
-			// build up the call with transient args to handle literal arguments as needed
-			std::vector<Expression> transientArgs;
-			transientArgs.reserve(builtin.literalArguments.size());
-			auto litIt = _builtin.literalArguments.begin();
-			for (size_t i = 0; i < builtin.literalArguments.size(); ++i)
-				if (builtin.literalArgument(i).has_value())
-					transientArgs.emplace_back(*litIt++);
-				else
-					transientArgs.emplace_back(Identifier{});
-			FunctionCall const transient{{}, BuiltinName{{}, _builtin.builtin}, std::move(transientArgs)};
-			builtin.generateCode(transient, m_assembly, m_builtinContext);
-		},
-		[&](SSACFG::Call const& _call) {
-			auto const* returnLabel = solidity::util::valueOrNullptr(m_returnLabels, _opId);
-			// check that if we have a return label, the call can continue
-			yulAssert(!!returnLabel == _call.canContinue);
-			m_assembly.setSourceLocation(opOriginLocation);
-			SSACFG const* calleeCFG  = m_controlFlow.functionGraph(_call.graphID);
-			yulAssert(calleeCFG);
-			m_assembly.appendJumpTo(
-				m_functionLabels.at(_call.graphID),
-				static_cast<int>(calleeCFG->numReturns) - static_cast<int>(calleeCFG->arguments.size()) - (_call.canContinue ? 1 : 0),
-				AbstractAssembly::JumpType::IntoFunction
-			);
-			// if we have a return label, append it to assembly and pop the label from the stack
-			// it might also be one of the inputs that is popped here but then the label will be popped below with
-			// the other inputs
-			if (returnLabel)
-			{
-				m_assembly.appendLabel(*returnLabel);
-				m_stack.pop<false>();
-			}
+	m_assembly.setSourceLocation(opOriginLocation);
+	switch (_inst.opcode)
+	{
+	case InstOpcode::Call:
+	{
+		SSACFG::Call const& call = m_cfg.callPayload(_instId);
+		auto const* returnLabel = solidity::util::valueOrNullptr(m_returnLabels, _instId);
+		// check that if we have a return label, the call can continue
+		yulAssert(!!returnLabel == call.canContinue);
+		SSACFG const* calleeCFG = m_controlFlow.functionGraph(call.graphID);
+		yulAssert(calleeCFG);
+		m_assembly.appendJumpTo(
+			m_functionLabels.at(call.graphID),
+			static_cast<int>(calleeCFG->numReturns) - static_cast<int>(calleeCFG->arguments.size()) - (call.canContinue ? 1 : 0),
+			AbstractAssembly::JumpType::IntoFunction
+		);
+		// if we have a return label, append it to assembly and pop the label from the stack
+		// it might also be one of the inputs that is popped here but then the label will be popped below with
+		// the other inputs
+		if (returnLabel)
+		{
+			m_assembly.appendLabel(*returnLabel);
+			m_stack.pop<false>();
 		}
-	}, _operation.kind);
+		break;
+	}
+	case InstOpcode::BuiltinCall:
+	{
+		SSACFG::BuiltinCall const& builtinCall = m_cfg.builtinPayload(_instId);
+		auto const& builtin = m_cfg.evmDialect.builtin(builtinCall.builtin);
+		// build up the call with transient args to handle literal arguments as needed
+		std::vector<Expression> transientArgs;
+		transientArgs.reserve(builtin.literalArguments.size());
+		auto litIt = builtinCall.literalArguments.begin();
+		for (size_t i = 0; i < builtin.literalArguments.size(); ++i)
+			if (builtin.literalArgument(i).has_value())
+				transientArgs.emplace_back(*litIt++);
+			else
+				transientArgs.emplace_back(Identifier{});
+		FunctionCall const transient{{}, BuiltinName{{}, builtinCall.builtin}, std::move(transientArgs)};
+		builtin.generateCode(transient, m_assembly, m_builtinContext);
+		break;
+	}
+	default:
+		yulAssert(false);
+	}
 	// simulate that the inputs are consumed
-	for (size_t i = 0; i < _operation.inputs.size(); ++i)
+	for (size_t i = 0; i < _inst.inputs.size(); ++i)
 		m_stack.pop<false>();
 	// simulate that the outputs are produced
-	for (auto value: _operation.outputs)
-		m_stack.push<false>(StackSlot::makeValueID(value));
+	for (auto value: SSACFG::outputsOf(_instId, _inst.numOutputs))
+		m_stack.push<false>(StackSlot::makeValueID(m_cfg, value));
 
 	// Assert that the operation produced its proclaimed output.
-	yulAssert(m_stack.size() == baseHeight + _operation.outputs.size());
+	yulAssert(m_stack.size() == baseHeight + _inst.numOutputs);
 	for (auto const& [stackEntry, output]: ranges::views::zip(
-		m_stack.data() | ranges::views::take_last(_operation.outputs.size()),
-		_operation.outputs
+		m_stack.data() | ranges::views::take_last(_inst.numOutputs),
+		SSACFG::outputsOf(_instId, _inst.numOutputs)
 	))
 		yulAssert(stackEntry.isValueID() && stackEntry.valueID() == output);
 	yulAssert(
@@ -393,15 +401,25 @@ void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlo
 {
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
 	auto const& block = m_cfg.block(_blockId);
-	yulAssert(!block.operations.empty(), "Terminated block must have at least one operation.");
-	std::visit(solidity::util::GenericVisitor{
-		[&](SSACFG::BuiltinCall const& _builtin) {
-			yulAssert(m_cfg.evmDialect.builtin(_builtin.builtin).controlFlowSideEffects.terminatesOrReverts(), "Last operation of Terminated block must terminate or revert.");
-		},
-		[](SSACFG::Call const& _call) {
-			yulAssert(!_call.canContinue, "Last operation of Terminated block must be a non-continuable call.");
+	// Find the last BuiltinCall/Call Inst in the block.
+	InstId lastOpInstId{};
+	for (InstId const instId: block.instructions | ranges::views::reverse)
+		if (m_cfg.isOperation(instId))
+		{
+			lastOpInstId = instId;
+			break;
 		}
-	}, m_cfg.operation(block.operations.back()).kind);
+	yulAssert(lastOpInstId.hasValue(), "Terminated block must have at least one operation.");
+	if (m_cfg.inst(lastOpInstId).opcode == InstOpcode::BuiltinCall)
+		yulAssert(
+			m_cfg.evmDialect.builtin(m_cfg.builtinPayload(lastOpInstId).builtin).controlFlowSideEffects.terminatesOrReverts(),
+			"Last operation of Terminated block must terminate or revert."
+		);
+	else
+		yulAssert(
+			!m_cfg.callPayload(lastOpInstId).canContinue,
+			"Last operation of Terminated block must be a non-continuable call."
+		);
 	// To be sure just emit another INVALID - should be removed by optimizer.
 	m_assembly.appendInstruction(evmasm::Instruction::INVALID);
 }
@@ -409,7 +427,7 @@ void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlo
 void CodeTransform::prepareBlockExitStack(StackData const& _target, PhiInverse const& _phiInverse)
 {
 	// pull back target to live in current variable space
-	auto const pulledBackTarget = stackPreImage(_target, _phiInverse);
+	auto const pulledBackTarget = stackPreImage(m_cfg, _target, _phiInverse);
 	// shuffle to target
 	{
 		auto const shuffleResult = StackShuffler<AssemblyCallbacks>::shuffle(m_stack, pulledBackTarget);

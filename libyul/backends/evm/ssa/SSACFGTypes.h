@@ -16,12 +16,10 @@
 */
 // SPDX-License-Identifier: GPL-3.0
 /**
- * Lightweight ID types used throughout the SSA CFG.
+ * Types used throughout the SSA CFG.
  */
 
 #pragma once
-
-#include <libsolutil/Assertions.h>
 
 #include <fmt/format.h>
 
@@ -40,7 +38,7 @@ struct BlockId
 {
 	using ValueType = std::uint32_t;
 	ValueType value = std::numeric_limits<ValueType>::max();
-	bool hasValue() const { return value != std::numeric_limits<ValueType>::max(); }
+	constexpr bool hasValue() const noexcept { return value != std::numeric_limits<ValueType>::max(); }
 	auto operator<=>(BlockId const&) const = default;
 };
 
@@ -48,51 +46,48 @@ struct InstId
 {
 	using ValueType = std::uint32_t;
 	ValueType value = std::numeric_limits<ValueType>::max();
-	bool hasValue() const { return value != std::numeric_limits<ValueType>::max(); }
+	constexpr bool hasValue() const noexcept { return value != std::numeric_limits<ValueType>::max(); }
 	auto operator<=>(InstId const&) const = default;
 };
 
+enum class InstOpcode : std::uint8_t
+{
+	Const,  // literal u256
+	Phi,  // no inputs, retrieves value by mapping
+	Upsilon,  // records phi pre-image at a phi predecessor block
+	BuiltinCall,  // dialect builtin
+	Call,  // user-defined function call
+	Unreachable,  // dead code
+	FunctionArg, // function param without inputs and a single output valueid
+};
+
+/// Identifies a specific produced value of an Inst.
 class ValueId
 {
 public:
-	enum class Kind: std::uint8_t
-	{
-		Literal,
-		Variable,
-		Phi,
-		Unreachable
-	};
-	using ValueType = std::uint32_t;
+	// this value refers to the n-th return value of an operation
+	using OutputSize = std::uint8_t;
+	/// Maximum number of outputs an Inst may produce. Bounded by the encoding of `OutputSize`.
+	static constexpr std::size_t maxOutputs = std::numeric_limits<OutputSize>::max();
 
 	constexpr ValueId() = default;
-	constexpr ValueId(ValueType const _value, Kind const _kind): m_value(_value), m_kind(_kind) {}
-	constexpr ValueId(ValueId const&) = default;
-	constexpr ValueId(ValueId&&) = default;
-	constexpr ValueId& operator=(ValueId const&) = default;
-	constexpr ValueId& operator=(ValueId&&) = default;
+	constexpr ValueId(InstId const _instId, OutputSize const _outputPos = 0):
+		m_instId(_instId),
+		m_outputPos(_outputPos)
+	{}
 
-	static ValueId constexpr makeLiteral(ValueType const& _value) { return ValueId{_value, Kind::Literal}; }
-	static ValueId constexpr makeVariable(ValueType const& _value) { return ValueId{_value, Kind::Variable}; }
-	static ValueId constexpr makePhi(ValueType const& _value) { return ValueId{_value, Kind::Phi}; }
-	static ValueId constexpr makeUnreachable() { return ValueId{0u, Kind::Unreachable}; }
+	bool constexpr hasValue() const noexcept { return m_instId.hasValue(); }
+	OutputSize constexpr outputPos() const noexcept { return m_outputPos; }
+	InstId constexpr instId() const noexcept { return m_instId; }
 
-	bool constexpr isLiteral() const noexcept { return m_kind == Kind::Literal; }
-	bool constexpr isVariable() const noexcept { return m_kind == Kind::Variable; }
-	bool constexpr isPhi() const noexcept { return m_kind == Kind::Phi; }
-	bool constexpr isUnreachable() const noexcept { return m_kind == Kind::Unreachable; }
-
-	bool constexpr hasValue() const { return m_value != std::numeric_limits<ValueType>::max(); }
-	ValueType constexpr value() const noexcept { return m_value; }
-	Kind constexpr kind() const noexcept { return m_kind; }
-
-	/// Returns a human-readable string representation. Requires the full SSACFG for literal values.
+	/// Returns a human-readable string representation
 	std::string str(SSACFG const& _cfg) const;
 
 	auto operator<=>(ValueId const&) const = default;
 
 private:
-	ValueType m_value{std::numeric_limits<ValueType>::max()};
-	Kind m_kind{Kind::Unreachable};
+	InstId m_instId{};
+	OutputSize m_outputPos{0};
 };
 
 }
@@ -117,11 +112,11 @@ struct fmt::formatter<solidity::yul::ssa::InstId>
 	static auto constexpr parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return ctx.begin(); }
 
 	template<typename FormatContext>
-	auto format(solidity::yul::ssa::InstId const& _opId, FormatContext& _ctx) const -> decltype(_ctx.out())
+	auto format(solidity::yul::ssa::InstId const& _instId, FormatContext& _ctx) const -> decltype(_ctx.out())
 	{
-		if (!_opId.hasValue())
+		if (!_instId.hasValue())
 			return fmt::format_to(_ctx.out(), "empty");
-		return fmt::format_to(_ctx.out(), "op{}", _opId.value);
+		return fmt::format_to(_ctx.out(), "i{}", _instId.value);
 	}
 };
 
@@ -135,17 +130,8 @@ struct fmt::formatter<solidity::yul::ssa::ValueId>
 	{
 		if (!_valueId.hasValue())
 			return fmt::format_to(_ctx.out(), "empty");
-		switch (_valueId.kind())
-		{
-		case solidity::yul::ssa::ValueId::Kind::Literal:
-			return fmt::format_to(_ctx.out(), "lit{}", _valueId.value());
-		case solidity::yul::ssa::ValueId::Kind::Variable:
-			return fmt::format_to(_ctx.out(), "v{}", _valueId.value());
-		case solidity::yul::ssa::ValueId::Kind::Phi:
-			return fmt::format_to(_ctx.out(), "phi{}", _valueId.value());
-		case solidity::yul::ssa::ValueId::Kind::Unreachable:
-			return fmt::format_to(_ctx.out(), "unreachable");
-		}
-		solidity::util::unreachable();
+		if (_valueId.outputPos() == 0)
+			return fmt::format_to(_ctx.out(), "v{}", _valueId.instId().value);
+		return fmt::format_to(_ctx.out(), "v{}.{}", _valueId.instId().value, _valueId.outputPos());
 	}
 };

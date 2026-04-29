@@ -39,25 +39,25 @@ class CallSites
 public:
 	using CallSiteID = std::uint32_t;
 
-	std::optional<CallSiteID> callSiteID(InstId _op) const
+	std::optional<CallSiteID> callSiteID(InstId _instId) const
 	{
-		if (auto const it = ranges::find(m_data, _op); it != m_data.end())
+		if (auto const it = ranges::find(m_data, _instId); it != m_data.end())
 			return static_cast<CallSiteID>(std::distance(m_data.begin(), it));
 		return std::nullopt;
 	}
 
-	InstId operationId(CallSiteID _callSite) const
+	InstId instId(CallSiteID _callSite) const
 	{
 		yulAssert(_callSite < m_data.size());
 		return m_data[_callSite];
 	}
 
-	CallSiteID addCallSite(InstId _op)
+	CallSiteID addCallSite(InstId _instId)
 	{
-		if (auto const id = callSiteID(_op))
+		if (auto const id = callSiteID(_instId))
 			return *id;
-		yulAssert(_op.hasValue());
-		m_data.emplace_back(_op);
+		yulAssert(_instId.hasValue());
+		m_data.emplace_back(_instId);
 		return static_cast<CallSiteID>(m_data.size() - 1);
 	}
 private:
@@ -90,7 +90,8 @@ public:
 	constexpr StackSlot& operator=(StackSlot&&) = default;
 
 	constexpr bool isValueID() const noexcept { return kind() == Kind::ValueID; }
-	constexpr bool isLiteralValueID() const noexcept { return m_valueIdKind == SSACFG::ValueId::Kind::Literal; }
+	constexpr bool isLiteralValueID() const noexcept { return m_valueIdOpcode == InstOpcode::Const; }
+	constexpr bool isPhiValueID() const noexcept { return m_valueIdOpcode == InstOpcode::Phi; }
 	constexpr bool isFunctionReturnLabel() const noexcept { return kind() == Kind::FunctionReturnLabel; }
 	constexpr bool isFunctionCallReturnLabel() const noexcept { return kind() == Kind::FunctionCallReturnLabel; }
 	constexpr bool isJunk() const noexcept { return kind() == Kind::Junk; }
@@ -98,25 +99,40 @@ public:
 
 	ControlFlowGraphs::FunctionGraphID functionReturnLabel() const { yulAssert(isFunctionReturnLabel()); return m_payload; }
 	CallSites::CallSiteID functionCallReturnLabel() const { yulAssert(isFunctionCallReturnLabel()); return m_payload; }
-	SSACFG::ValueId valueID() const { yulAssert(isValueID()); return {m_payload, m_valueIdKind}; }
+	SSACFG::ValueId valueID() const
+	{
+		yulAssert(isValueID());
+		return {InstId{m_payload}, m_valueIdOutputPos};
+	}
 
 	static constexpr StackSlot makeJunk() { return {0, Kind::Junk}; }
-	static constexpr StackSlot makeValueID(SSACFG::ValueId const& _valueID) { return {_valueID.value(), Kind::ValueID, _valueID.kind()}; }
+	static StackSlot makeValueID(SSACFG const& _cfg, SSACFG::ValueId _valueID)
+	{
+		return {_valueID.instId().value, Kind::ValueID, _valueID.outputPos(), _cfg.kindOf(_valueID)};
+	}
+	static StackSlot makeValueID(InstructionStore const& _store, SSACFG::ValueId _valueID)
+	{
+		return {_valueID.instId().value, Kind::ValueID, _valueID.outputPos(), _store.kindOf(_valueID)};
+	}
 	static constexpr StackSlot makeFunctionReturnLabel(ControlFlowGraphs::FunctionGraphID const _graphID) { return {_graphID, Kind::FunctionReturnLabel}; }
 	static constexpr StackSlot makeFunctionCallReturnLabel(CallSites::CallSiteID const _callSiteID) { return {_callSiteID, Kind::FunctionCallReturnLabel};	}
 
 	auto operator<=>(StackSlot const&) const = default;
 private:
-	constexpr StackSlot(std::uint32_t const _payload, Kind const _kind, SSACFG::ValueId::Kind const _valueIdKind = SSACFG::ValueId::Kind::Unreachable):
+	constexpr StackSlot(std::uint32_t const _payload, Kind const _kind, ValueId::OutputSize const _valueIdOutputPos = 0, InstOpcode const _valueIdOpcode = InstOpcode::Unreachable):
 		m_payload(_payload),
 		m_kind(_kind),
-		m_valueIdKind(_valueIdKind)
+		m_valueIdOutputPos(_valueIdOutputPos),
+		m_valueIdOpcode(_valueIdOpcode)
 	{}
 
 	/// interpretation depends on kind
 	std::uint32_t m_payload;
 	Kind m_kind;
-	SSACFG::ValueId::Kind m_valueIdKind;
+	/// for Kind::ValueID: output position of the referenced value within its Inst
+	ValueId::OutputSize m_valueIdOutputPos;
+	/// for Kind::ValueID: cached Opcode of the defining Inst
+	InstOpcode m_valueIdOpcode;
 };
 static_assert(sizeof(StackSlot) == 8, "Want cache efficiency, benchmark this if you go beyond 8 bytes");
 static_assert(std::is_trivially_copyable_v<StackSlot>, "Should be able to use memcpy semantics");

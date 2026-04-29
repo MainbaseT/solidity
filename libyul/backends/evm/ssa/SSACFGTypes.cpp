@@ -20,22 +20,28 @@
 
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
-#include <libsolutil/CommonData.h>
-#include <libsolutil/Numeric.h>
-
-using namespace solidity::util;
 using namespace solidity::yul::ssa;
 
 std::string ValueId::str(SSACFG const& _cfg) const
 {
 	if (!hasValue())
 		return "INVALID";
-	switch (kind())
+	switch (_cfg.kindOf(*this))
 	{
-		case Kind::Literal:  return toCompactHexWithPrefix(_cfg.literalInfo(*this).value);
-		case Kind::Variable: return fmt::format("v{}", value());
-		case Kind::Phi: return fmt::format("phi{}", value());
-		case Kind::Unreachable: return "[unreachable]";
+	case InstOpcode::Const:
+		return toCompactHexWithPrefix(_cfg.literalPayload(instId()));
+	case InstOpcode::BuiltinCall:
+	case InstOpcode::Call:
+	case InstOpcode::FunctionArg:
+		if (m_outputPos == 0)
+			return fmt::format("v{}", m_instId.value);
+		return fmt::format("v{}.{}", m_instId.value, m_outputPos);
+	case InstOpcode::Phi:
+		return fmt::format("phi{}", m_instId.value);
+	case InstOpcode::Unreachable:
+		return "[unreachable]";
+	case InstOpcode::Upsilon:
+		yulAssert(false, "Upsilon Insts have no output ValueId");
 	}
-	unreachable();
+	util::unreachable();
 }
