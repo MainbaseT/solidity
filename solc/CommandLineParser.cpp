@@ -648,7 +648,8 @@ General Information)").c_str(),
 		(
 			g_strRevertStrings.c_str(),
 			po::value<std::string>()->value_name(util::joinHumanReadable(g_revertStringsArgs, ",")),
-			"Strip revert (and require) reason strings or add additional debugging information."
+			"Strip revert (and require) reason strings or add additional debugging information. "
+			"Note that 'strip' does not remove custom errors."
 		)
 		(
 			g_strDebugInfo.c_str(),
