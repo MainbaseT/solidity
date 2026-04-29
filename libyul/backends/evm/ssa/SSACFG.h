@@ -203,6 +203,10 @@ public:
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
+		yulAssert(
+			_numOutputs <= ValueId::maxOutputs,
+			fmt::format("SSA CFG: BuiltinCall with {} outputs exceeds the maximum of {}.", _numOutputs, ValueId::maxOutputs)
+		);
 		InstId const id = scheduleInBlock(
 			m_instructions.appendBuiltinCall(_block, std::move(_payload), std::move(_inputs), _numOutputs),
 			_block
@@ -220,6 +224,10 @@ public:
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
+		yulAssert(
+			_numOutputs <= ValueId::maxOutputs,
+			fmt::format("SSA CFG: Call with {} outputs exceeds the maximum of {}.", _numOutputs, ValueId::maxOutputs)
+		);
 		InstId const id = scheduleInBlock(
 			m_instructions.appendCall(_block, std::move(_payload), std::move(_inputs), _numOutputs),
 			_block

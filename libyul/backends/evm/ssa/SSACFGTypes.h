@@ -67,6 +67,8 @@ class ValueId
 public:
 	// this value refers to the n-th return value of an operation
 	using OutputSize = std::uint8_t;
+	/// Maximum number of outputs an Inst may produce. Bounded by the encoding of `OutputSize`.
+	static constexpr std::size_t maxOutputs = std::numeric_limits<OutputSize>::max();
 
 	constexpr ValueId() = default;
 	constexpr ValueId(InstId const _instId, OutputSize const _outputPos = 0):
