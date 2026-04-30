@@ -147,6 +147,9 @@ public:
 	bool isUnreachable(InstId const _id) const { return inst(_id).isUnreachable(); }
 	bool isFunctionArg(InstId const _id) const { return inst(_id).isFunctionArg(); }
 	bool isProjection(InstId const _id) const { return inst(_id).isProjection(); }
+	bool isIdentity(InstId const _id) const { return inst(_id).isIdentity(); }
+	bool isNop(InstId const _id) const { return inst(_id).isNop(); }
+	bool isTombstone(InstId const _id) const { return inst(_id).isTombstone(); }
 	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
 
 	/// Returns the phi targeted by an Upsilon Inst.
@@ -236,6 +239,37 @@ public:
 	InstId emitUpsilon(BlockId const _block, InstId const _value, InstId const _phi)
 	{
 		return scheduleInBlock(m_instructions.appendUpsilon(_block, _value, _phi), _block);
+	}
+
+	/// Flips _target's opcode to Identity forwarding _forward
+	void replaceWithIdentity(InstId const _target, InstId const _forward)
+	{
+		m_instructions.replaceWithIdentity(_target, _forward);
+	}
+
+	/// Flips _target to Const carrying _value
+	void replaceWithConst(InstId const _target, u256 _value)
+	{
+		m_instructions.replaceWithConst(_target, std::move(_value));
+	}
+
+	/// Flips _target to Nop. Caller must ensure _target produces no observable value
+	void replaceWithNop(InstId const _target)
+	{
+		m_instructions.replaceWithNop(_target);
+	}
+
+	/// Tombstones an Inst, sweeping any trailing Projection cluster too
+	void tombstone(InstId const _id)
+	{
+		m_instructions.tombstone(_id);
+	}
+
+	/// Returns the number of Projections trailing `_producer` in `m_insts` (0 for
+	/// non-multi-return slots). Thin wrapper around `InstructionStore::numTrailingProjections`.
+	InstructionStore::NumReturnsSizeType numTrailingProjections(InstId const _producer) const
+	{
+		return m_instructions.numTrailingProjections(_producer);
 	}
 
 	std::string toDot(
