@@ -32,7 +32,7 @@ class SSACFG;
 namespace transform
 {
 /// Resolves Identity / Nop Insts and tombstones their slots
-void removeIdentities(SSACFG& _cfg);
+void removeIdentitiesAndNops(SSACFG& _cfg);
 }
 
 }

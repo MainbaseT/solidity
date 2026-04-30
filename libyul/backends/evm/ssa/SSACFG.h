@@ -152,6 +152,19 @@ public:
 	bool isTombstone(InstId const _id) const { return inst(_id).isTombstone(); }
 	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
 
+	/// Walks the Identity chain starting at `_id` and returns the terminal (non-Identity) target.
+	InstId resolveIdentity(InstId _id) const
+	{
+		while (_id.hasValue() && kindOf(_id) == InstOpcode::Identity)
+		{
+			auto const& i = inst(_id);
+			yulAssert(i.inputs.size() == 1);
+			yulAssert(i.inputs[0] != _id, "Identity self-loop");
+			_id = i.inputs[0];
+		}
+		return _id;
+	}
+
 	/// Returns the phi targeted by an Upsilon Inst.
 	InstId upsilonPhi(InstId const _id) const { return m_instructions.upsilonPhi(_id); }
 
