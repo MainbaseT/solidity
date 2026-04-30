@@ -5,6 +5,7 @@ Language Features:
 Compiler Features:
 
 Bugfixes:
+* NatSpec: Disallow ``@return`` tags on event documentation; events do not have return parameters (consistent with errors).
 
 
 ### 0.8.35 (2026-04-29)
