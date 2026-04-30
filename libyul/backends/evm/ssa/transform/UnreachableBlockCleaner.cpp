@@ -47,12 +47,17 @@ void transform::cleanUnreachableBlocks(SSACFG& _cfg)
 		});
 	}
 
+	auto& store = _cfg.instructionStore();
 	for (SSACFG::BlockId blockId{0}; blockId.value < _cfg.numBlocks(); ++blockId.value)
 	{
 		auto& block = _cfg.block(blockId);
 		if (reachable[blockId.value])
 			std::erase_if(block.entries, [&](auto const& entry) { return !reachable[entry.value]; });
 		else
+		{
+			for (InstId const id: block.instructions)
+				store.tombstone(id);
 			block = {};
+		}
 	}
 }
