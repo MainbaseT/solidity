@@ -43,6 +43,8 @@
 #include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
+#include <libyul/AsmAnalysisInfo.h>
+
 #include <map>
 #include <stack>
 #include <unordered_map>
@@ -84,24 +86,26 @@ public:
 
 	void operator()(Block const& _block);
 
-	SSACFG::ValueId operator()(FunctionCall const& _call);
-	SSACFG::ValueId operator()(Identifier const& _identifier);
-	SSACFG::ValueId operator()(Literal const& _literal);
+	InstId operator()(FunctionCall const& _call);
+	InstId operator()(Identifier const& _identifier);
+	InstId operator()(Literal const& _literal);
 
 private:
 	void assign(std::vector<std::reference_wrapper<Scope::Variable const>> _variables, Expression const* _expression);
+	/// Visits a function call expression and returns the InstId of the producing operation.
+	/// For multi-output operations the call inserts projection operations into the current block.
 	InstId visitFunctionCall(FunctionCall const& _call);
 	void registerFunctionDefinition(FunctionDefinition const& _functionDefinition);
 	void buildFunctionGraph(Scope::Function const* _function, FunctionDefinition const* _functionDefinition);
 
-	SSACFG::ValueId zero();
-	SSACFG::ValueId readVariable(Scope::Variable const& _variable, SSACFG::BlockId _block);
-	SSACFG::ValueId readVariableRecursive(Scope::Variable const& _variable, SSACFG::BlockId _block);
+	InstId zero();
+	InstId readVariable(Scope::Variable const& _variable, SSACFG::BlockId _block);
+	InstId readVariableRecursive(Scope::Variable const& _variable, SSACFG::BlockId _block);
 	/// Emit upsilons in each predecessor of _phi's block, recording the phi pre-images.
-	void addPhiOperands(Scope::Variable const& _variable, SSACFG::ValueId _phi);
+	void addPhiOperands(Scope::Variable const& _variable, InstId _phi);
 	/// Emit a single Upsilon(_value -> _phi) into block _block.
-	void emitUpsilon(SSACFG::BlockId _block, SSACFG::ValueId _value, SSACFG::ValueId _phi);
-	void writeVariable(Scope::Variable const& _variable, SSACFG::BlockId _block, SSACFG::ValueId _value);
+	void emitUpsilon(SSACFG::BlockId _block, InstId _value, InstId _phi);
+	void writeVariable(Scope::Variable const& _variable, SSACFG::BlockId _block, InstId _value);
 
 	ControlFlowGraphs& m_controlFlow;
 	SSACFG& m_graph;
@@ -126,7 +130,7 @@ private:
 
 	struct BlockInfo {
 		bool sealed = false;
-		std::vector<std::tuple<SSACFG::ValueId, std::reference_wrapper<Scope::Variable const>>> incompletePhis;
+		std::vector<std::tuple<InstId, std::reference_wrapper<Scope::Variable const>>> incompletePhis;
 	};
 	std::vector<BlockInfo> m_blockInfo;
 
@@ -140,7 +144,7 @@ private:
 
 	std::unordered_map<
 		Scope::Variable const*,
-		std::vector<SSACFG::ValueId>
+		std::vector<InstId>
 	> m_currentDef;
 
 	struct ForLoopInfo {
@@ -149,7 +153,7 @@ private:
 	};
 	std::stack<ForLoopInfo> m_forLoopInfo;
 
-	SSACFG::ValueId& currentDef(Scope::Variable const& _variable, SSACFG::BlockId _block)
+	InstId& currentDef(Scope::Variable const& _variable, SSACFG::BlockId _block)
 	{
 		auto& varDefs = m_currentDef[&_variable];
 		if (varDefs.size() <= _block.value)
@@ -159,7 +163,7 @@ private:
 
 	void conditionalJump(
 		langutil::DebugData::ConstPtr _debugData,
-		SSACFG::ValueId _condition,
+		InstId _condition,
 		SSACFG::BlockId _nonZero,
 		SSACFG::BlockId _zero
 	);

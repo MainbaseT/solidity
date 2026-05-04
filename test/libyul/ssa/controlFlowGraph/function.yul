@@ -28,8 +28,10 @@
 // Entry -> Block0_0;
 // Block0_0 [fillcolor="#FF746C", style=filled, label="\
 // Block 0; (0, max 0)\nLiveIn: \l\
-// LiveOut: \l\nUsed: \l\nv0, v0.1 := i()\l\
-// h(v0)\l\
+// LiveOut: \l\nUsed: \l\nv0 := i()\l\
+// v1 := v0.proj(0)\l\
+// v2 := v0.proj(1)\l\
+// h(v1)\l\
 // "];
 // Block0_0Exit [label="Terminated"];
 // Block0_0 -> Block0_0Exit;

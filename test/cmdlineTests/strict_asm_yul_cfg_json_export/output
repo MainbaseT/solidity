@@ -63,7 +63,7 @@ Yul Control Flow Graph:
                         ],
                         "op": "datasize",
                         "out": [
-                            "v6"
+                            "v7"
                         ]
                     },
                     {
@@ -73,13 +73,13 @@ Yul Control Flow Graph:
                         ],
                         "op": "dataoffset",
                         "out": [
-                            "v7"
+                            "v8"
                         ]
                     },
                     {
                         "in": [
-                            "v6",
                             "v7",
+                            "v8",
                             "v0"
                         ],
                         "op": "codecopy",
@@ -87,7 +87,7 @@ Yul Control Flow Graph:
                     },
                     {
                         "in": [
-                            "v6",
+                            "v7",
                             "v0"
                         ],
                         "op": "return",
@@ -309,7 +309,7 @@ Yul Control Flow Graph:
                     },
                     {
                         "exit": {
-                            "cond": "v19",
+                            "cond": "v20",
                             "targets": [
                                 "Block9",
                                 "Block8"
@@ -324,34 +324,34 @@ Yul Control Flow Graph:
                                 ],
                                 "op": "not",
                                 "out": [
-                                    "v16"
+                                    "v17"
                                 ]
                             },
                             {
                                 "in": [],
                                 "op": "calldatasize",
                                 "out": [
-                                    "v17"
+                                    "v18"
                                 ]
                             },
                             {
                                 "in": [
-                                    "v16",
-                                    "v17"
+                                    "v17",
+                                    "v18"
                                 ],
                                 "op": "add",
                                 "out": [
-                                    "v18"
+                                    "v19"
                                 ]
                             },
                             {
                                 "in": [
                                     "0x00",
-                                    "v18"
+                                    "v19"
                                 ],
                                 "op": "slt",
                                 "out": [
-                                    "v19"
+                                    "v20"
                                 ]
                             }
                         ],

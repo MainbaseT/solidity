@@ -147,8 +147,7 @@ void SSACFGBuilder::operator()(ExpressionStatement const& _expressionStatement)
 {
 	auto const* functionCall = std::get_if<FunctionCall>(&_expressionStatement.expression);
 	yulAssert(functionCall);
-	InstId const id = visitFunctionCall(*functionCall);
-	yulAssert(m_graph.inst(id).numOutputs == 0);
+	visitFunctionCall(*functionCall);
 }
 
 void SSACFGBuilder::operator()(Assignment const& _assignment)
@@ -233,15 +232,15 @@ void SSACFGBuilder::operator()(Switch const& _switch)
 	std::optional<BuiltinHandle> equalityBuiltinHandle = m_dialect.equalityFunctionHandle();
 	yulAssert(equalityBuiltinHandle);
 
+	auto const& equalityBuiltin = m_dialect.builtin(*equalityBuiltinHandle);
 	auto makeValueCompare = [&](Case const& _case) {
-		InstId const id = m_graph.makeBuiltinCall(
+		return m_graph.makeBuiltinCallWithProjections(
 			m_currentBlock,
 			SSACFG::BuiltinCall{*equalityBuiltinHandle, {}},
 			{m_graph.newLiteral(debugDataOf(_case), _case.value->value.value()), expression},
-			1,
+			static_cast<InstructionStore::NumReturnsSizeType>(equalityBuiltin.numReturns),
 			debugDataOf(_case)
 		);
-		return ValueId{id};
 	};
 
 	auto afterSwitch = m_graph.makeBlock(currentBlockDebugData());
@@ -401,20 +400,19 @@ void SSACFGBuilder::operator()(Block const& _block)
 		std::visit(*this, statement);
 }
 
-SSACFG::ValueId SSACFGBuilder::operator()(FunctionCall const& _call)
+InstId SSACFGBuilder::operator()(FunctionCall const& _call)
 {
-	InstId const id = visitFunctionCall(_call);
-	yulAssert(m_graph.inst(id).numOutputs == 1);
-	return SSACFG::ValueId{id};
+	// Single-output expression context: the call's InstId is itself the value handle.
+	return visitFunctionCall(_call);
 }
 
-SSACFG::ValueId SSACFGBuilder::operator()(Identifier const& _identifier)
+InstId SSACFGBuilder::operator()(Identifier const& _identifier)
 {
 	auto const& var = lookupVariable(_identifier.name);
 	return readVariable(var, m_currentBlock);
 }
 
-SSACFG::ValueId SSACFGBuilder::operator()(Literal const& _literal)
+InstId SSACFGBuilder::operator()(Literal const& _literal)
 {
 	return m_graph.newLiteral(currentBlockDebugData(), _literal.value.value());
 }
@@ -423,10 +421,12 @@ void SSACFGBuilder::assign(std::vector<std::reference_wrapper<Scope::Variable co
 {
 	if (auto const* functionCall = std::get_if<FunctionCall>(_expression))
 	{
-		InstId const id = visitFunctionCall(*functionCall);
-		yulAssert(m_graph.inst(id).numOutputs == _variables.size());
-		for (auto const& [var, value]: ranges::zip_view(_variables, m_graph.instOutputs(id)))
-			writeVariable(var, m_currentBlock, value);
+		InstId const callId = visitFunctionCall(*functionCall);
+		std::vector<InstId> outputs;
+		m_graph.forEachOutput(callId, [&](InstId const id) { outputs.push_back(id); });
+		yulAssert(outputs.size() == _variables.size());
+		for (auto const& [var, output]: ranges::zip_view(_variables, outputs))
+			writeVariable(var, m_currentBlock, output);
 		return;
 	}
 	auto const rhs = _expression ?
@@ -452,16 +452,16 @@ InstId SSACFGBuilder::visitFunctionCall(FunctionCall const& _call)
 					yulAssert(std::holds_alternative<Literal>(arg));
 					literalArguments.emplace_back(std::get<Literal>(arg));
 				}
-			std::vector<SSACFG::ValueId> inputs;
+			std::vector<InstId> inputs;
 			for (auto&& [idx, arg]: _call.arguments | ranges::views::enumerate | ranges::views::reverse)
 				if (!builtin.literalArgument(idx).has_value())
 					inputs.emplace_back(std::visit(*this, arg));
 			canContinue = builtin.controlFlowSideEffects.canContinue;
-			return m_graph.makeBuiltinCall(
+			return m_graph.makeBuiltinCallWithProjections(
 				m_currentBlock,
 				SSACFG::BuiltinCall{_builtinName.handle, std::move(literalArguments)},
 				std::move(inputs),
-				builtin.numReturns,
+				static_cast<InstructionStore::NumReturnsSizeType>(builtin.numReturns),
 				debugDataOf(_call)
 			);
 		},
@@ -474,14 +474,14 @@ InstId SSACFGBuilder::visitFunctionCall(FunctionCall const& _call)
 			canContinue = m_sideEffects.functionSideEffects().at(definition).canContinue;
 			auto const calleeIt = m_functionScopeToID.find(&function);
 			yulAssert(calleeIt != m_functionScopeToID.end(), "Called function has no registered graph id.");
-			std::vector<SSACFG::ValueId> inputs;
+			std::vector<InstId> inputs;
 			for (auto const& arg: _call.arguments | ranges::views::reverse)
 				inputs.emplace_back(std::visit(*this, arg));
-			return m_graph.makeCall(
+			return m_graph.makeCallWithProjections(
 				m_currentBlock,
-				SSACFG::Call{calleeIt->second, canContinue},
+				SSACFG::Call{calleeIt->second, canContinue, function.numReturns},
 				std::move(inputs),
-				function.numReturns,
+				static_cast<InstructionStore::NumReturnsSizeType>(function.numReturns),
 				debugDataOf(_call)
 			);
 		}
@@ -495,12 +495,12 @@ InstId SSACFGBuilder::visitFunctionCall(FunctionCall const& _call)
 	return id;
 }
 
-SSACFG::ValueId SSACFGBuilder::zero()
+InstId SSACFGBuilder::zero()
 {
 	return m_graph.newLiteral(currentBlockDebugData(), 0u);
 }
 
-SSACFG::ValueId SSACFGBuilder::readVariable(Scope::Variable const& _variable, SSACFG::BlockId _block)
+InstId SSACFGBuilder::readVariable(Scope::Variable const& _variable, SSACFG::BlockId _block)
 {
 	auto const& def = currentDef(_variable, _block);
 	if (def.hasValue())
@@ -508,12 +508,12 @@ SSACFG::ValueId SSACFGBuilder::readVariable(Scope::Variable const& _variable, SS
 	return readVariableRecursive(_variable, _block);
 }
 
-SSACFG::ValueId SSACFGBuilder::readVariableRecursive(Scope::Variable const& _variable, SSACFG::BlockId _block)
+InstId SSACFGBuilder::readVariableRecursive(Scope::Variable const& _variable, SSACFG::BlockId _block)
 {
 	auto& block = m_graph.block(_block);
 	auto& info = blockInfo(_block);
 
-	SSACFG::ValueId val;
+	InstId val;
 	if (!info.sealed)
 	{
 		// incomplete block: create a phi and defer upsilon emission until the block is sealed
@@ -534,9 +534,9 @@ SSACFG::ValueId SSACFGBuilder::readVariableRecursive(Scope::Variable const& _var
 	return val;
 }
 
-void SSACFGBuilder::addPhiOperands(Scope::Variable const& _variable, SSACFG::ValueId _phi)
+void SSACFGBuilder::addPhiOperands(Scope::Variable const& _variable, InstId _phi)
 {
-	SSACFG::BlockId const phiBlock = m_graph.inst(_phi.instId()).block;
+	SSACFG::BlockId const phiBlock = m_graph.inst(_phi).block;
 	for (auto const& pred: m_graph.block(phiBlock).entries)
 	{
 		auto const val = readVariable(_variable, pred);
@@ -544,13 +544,13 @@ void SSACFGBuilder::addPhiOperands(Scope::Variable const& _variable, SSACFG::Val
 	}
 }
 
-void SSACFGBuilder::emitUpsilon(SSACFG::BlockId _block, SSACFG::ValueId _value, SSACFG::ValueId _phi)
+void SSACFGBuilder::emitUpsilon(SSACFG::BlockId _block, InstId _value, InstId _phi)
 {
 	yulAssert(m_graph.isPhi(_phi));
 	m_graph.emitUpsilon(_block, _value, _phi);
 }
 
-void SSACFGBuilder::writeVariable(Scope::Variable const& _variable, SSACFG::BlockId _block, SSACFG::ValueId _value)
+void SSACFGBuilder::writeVariable(Scope::Variable const& _variable, SSACFG::BlockId _block, InstId _value)
 {
 	currentDef(_variable, _block) = _value;
 }
@@ -597,7 +597,7 @@ void SSACFGBuilder::sealBlock(SSACFG::BlockId _block)
 
 void SSACFGBuilder::conditionalJump(
 	langutil::DebugData::ConstPtr _debugData,
-	SSACFG::ValueId _condition,
+	InstId _condition,
 	SSACFG::BlockId _nonZero,
 	SSACFG::BlockId _zero
 )
