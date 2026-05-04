@@ -422,11 +422,20 @@ void SSACFGBuilder::assign(std::vector<std::reference_wrapper<Scope::Variable co
 	if (auto const* functionCall = std::get_if<FunctionCall>(_expression))
 	{
 		InstId const callId = visitFunctionCall(*functionCall);
-		std::vector<InstId> outputs;
-		m_graph.forEachOutput(callId, [&](InstId const id) { outputs.push_back(id); });
-		yulAssert(outputs.size() == _variables.size());
-		for (auto const& [var, output]: ranges::zip_view(_variables, outputs))
-			writeVariable(var, m_currentBlock, output);
+		if (m_graph.isUnreachable(callId))
+		{
+			// The callee did not continue: post-call block is unreachable. Bind variables to unreachable.
+			for (auto const& var: _variables)
+				writeVariable(var, m_currentBlock, callId);
+		}
+		else
+		{
+			std::vector<InstId> outputs;
+			m_graph.forEachOutput(callId, [&](InstId const id) { outputs.push_back(id); });
+			yulAssert(outputs.size() == _variables.size());
+			for (auto const& [var, output]: ranges::zip_view(_variables, outputs))
+				writeVariable(var, m_currentBlock, output);
+		}
 		return;
 	}
 	auto const rhs = _expression ?
@@ -486,13 +495,14 @@ InstId SSACFGBuilder::visitFunctionCall(FunctionCall const& _call)
 			);
 		}
 	}, _call.functionName);
-	if (!canContinue)
-	{
-		currentBlock().exit = SSACFG::BasicBlock::Terminated{};
-		m_currentBlock = m_graph.makeBlock(currentBlockDebugData());
-		sealBlock(m_currentBlock);
-	}
-	return id;
+	if (canContinue)
+		return id;
+	// `id` lives in the now-Terminated call block and won't dominate the successor,
+	// so terminate, open a fresh successor and signal non-continuation via unreachableValue.
+	currentBlock().exit = SSACFG::BasicBlock::Terminated{};
+	m_currentBlock = m_graph.makeBlock(currentBlockDebugData());
+	sealBlock(m_currentBlock);
+	return m_graph.unreachableValue();
 }
 
 InstId SSACFGBuilder::zero()
