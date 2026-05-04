@@ -430,10 +430,10 @@ void SSACFGBuilder::assign(std::vector<std::reference_wrapper<Scope::Variable co
 		}
 		else
 		{
-			std::vector<InstId> outputs;
-			m_graph.forEachOutput(callId, [&](InstId const id) { outputs.push_back(id); });
+			yulAssert(m_graph.numReturnsOf(callId) == _variables.size());
+			auto const outputs = m_graph.outputsOf(callId);
 			yulAssert(outputs.size() == _variables.size());
-			for (auto const& [var, output]: ranges::zip_view(_variables, outputs))
+			for (auto const& [var, output]: ranges::views::zip(_variables, outputs))
 				writeVariable(var, m_currentBlock, output);
 		}
 		return;

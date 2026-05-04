@@ -231,7 +231,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 	auto const& operationsLiveOut = m_liveness.operationsLiveOut(_blockId);
 	blockLayout.operationIn.reserve(operationsLiveOut.size());
 	std::size_t operationIndex = 0;
-	m_cfg.forEachOperation(block, [&](InstId const _instId, SSACFG::Inst const& _inst){
+	m_cfg.forEachOperation(block, [&](InstId const _instId, SSACFG::Inst const& _inst) {
 		auto opLiveOutWithoutOutputs = operationsLiveOut[operationIndex];
 		m_cfg.forEachOutput(_instId, [&](InstId const id) { opLiveOutWithoutOutputs.erase(id); });
 

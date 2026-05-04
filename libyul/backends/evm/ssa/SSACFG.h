@@ -32,9 +32,10 @@
 
 #include <libsolutil/Numeric.h>
 
+#include <range/v3/range/concepts.hpp>
 #include <range/v3/range/conversion.hpp>
+#include <range/v3/range/traits.hpp>
 #include <range/v3/view/iota.hpp>
-#include <range/v3/view/subrange.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <concepts>
@@ -46,6 +47,9 @@ namespace solidity::yul::ssa
 {
 class LivenessAnalysis;
 struct ControlFlowGraphs;
+
+template<typename R, typename T>
+concept InputRangeOf = ranges::input_range<R> && std::same_as<ranges::range_value_t<R>, T>;
 
 class SSACFG
 {
@@ -316,7 +320,7 @@ public:
 	/// View over the contiguous trailing Projections of `_producer` in `m_insts`. Empty for ops with <= 1 returns.
 	/// Note this relies on the m_insts-contiguity invariant established by `make(Builtin)CallWithProjections`:
 	/// projections live at `m_insts[_producer.value+1..+numReturns]`.
-	auto projectionsOf(InstId const _producer) const
+	InputRangeOf<InstId> auto projectionsOf(InstId const _producer) const
 	{
 		std::size_t const n = numReturnsOf(_producer);
 		std::size_t const count = n >= 2 ? n : 0;
@@ -341,26 +345,33 @@ public:
 		}
 		return
 			ranges::views::iota(static_cast<InstId::ValueType>(firstIdx), static_cast<InstId::ValueType>(lastIdx)) |
-			ranges::views::transform([](InstId::ValueType const _idVal) { return InstId{_idVal}; });
+			ranges::views::transform(&toInstId);
+	}
+
+	/// View over the logical outputs of `_producer` in stack order: the producer itself if it has a single return,
+	/// the trailing Projections if it has multiple, and an empty range otherwise.
+	InputRangeOf<InstId> auto outputsOf(InstId const _producer) const
+	{
+		std::size_t const n = numReturnsOf(_producer);
+		if (n >= 2)
+			return projectionsOf(_producer);
+		auto const firstIdx = static_cast<InstId::ValueType>(_producer.value);
+		return
+			ranges::views::iota(firstIdx, static_cast<InstId::ValueType>(firstIdx + n)) |
+			ranges::views::transform(&toInstId);
 	}
 
 	/// Invokes `_fn(InstId)` once per logical output of `_producer` in stack order.
 	template<std::invocable<InstId> Fn>
 	void forEachOutput(InstId const _producer, Fn&& _fn) const
 	{
-		auto const n = numReturnsOf(_producer);
-		if (n == 0)
-			return;
-		if (n == 1)
-		{
-			_fn(_producer);
-			return;
-		}
-		for (InstId const id: projectionsOf(_producer))
+		for (InstId const id: outputsOf(_producer))
 			_fn(id);
 	}
 
 private:
+	static InstId toInstId(InstId::ValueType const _v) { return InstId{_v}; }
+
 	InstId makeBuiltinCall(
 		BlockId const _block,
 		BuiltinCall _payload,

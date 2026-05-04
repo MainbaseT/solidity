@@ -70,9 +70,7 @@ Json toJson(Json& _ret, SSACFG const& _cfg, InstId const _instId, ControlFlowGra
 	}
 
 	opJson["in"] = toJson(_cfg, inst.inputs);
-	std::vector<InstId> outputs;
-	_cfg.forEachOutput(_instId, [&](InstId const id) { outputs.push_back(id); });
-	opJson["out"] = toJson(_cfg, outputs);
+	opJson["out"] = toJson(_cfg, _cfg.outputsOf(_instId));
 
 	return opJson;
 }

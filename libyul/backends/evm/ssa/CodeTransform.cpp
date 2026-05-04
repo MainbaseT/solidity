@@ -309,16 +309,14 @@ void CodeTransform::operator()(InstId _instId, StackData const& _operationInputL
 	for (size_t i = 0; i < _inst.inputs.size(); ++i)
 		m_stack.pop<false>();
 	// simulate that the outputs are produced
-	std::vector<InstId> outputs;
-	outputs.reserve(m_cfg.numReturnsOf(_instId));
-	m_cfg.forEachOutput(_instId, [&](InstId const id) { outputs.push_back(id); });
-	for (InstId const id: outputs)
+	auto const numOutputs = m_cfg.numReturnsOf(_instId);
+	for (InstId const id: m_cfg.outputsOf(_instId))
 		m_stack.push<false>(StackSlot::makeValue(m_cfg, id));
 
-	yulAssert(m_stack.size() == baseHeight + outputs.size());
+	yulAssert(m_stack.size() == baseHeight + numOutputs);
 	for (auto const& [stackEntry, output]: ranges::views::zip(
-		m_stack.data() | ranges::views::take_last(outputs.size()),
-		outputs
+		m_stack.data() | ranges::views::take_last(numOutputs),
+		m_cfg.outputsOf(_instId)
 	))
 		yulAssert(stackEntry.isValue() && stackEntry.value() == output);
 	yulAssert(
