@@ -27,12 +27,16 @@
 
 #include <libyul/backends/evm/EVMDialect.h>
 
-#include <libyul/AST.h>
-#include <libyul/AsmAnalysisInfo.h>
 #include <libyul/Dialect.h>
 #include <libyul/Exceptions.h>
 
 #include <libsolutil/Numeric.h>
+
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/range/traits.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <concepts>
 #include <functional>
@@ -43,6 +47,9 @@ namespace solidity::yul::ssa
 {
 class LivenessAnalysis;
 struct ControlFlowGraphs;
+
+template<typename R, typename T>
+concept InputRangeOf = ranges::input_range<R> && std::same_as<ranges::range_value_t<R>, T>;
 
 class SSACFG
 {
@@ -64,7 +71,6 @@ public:
 	~SSACFG() = default;
 
 	using BlockId = ssa::BlockId;
-	using ValueId = ssa::ValueId;
 
 	using BuiltinCall = InstructionStore::BuiltinCall;
 	using Call = InstructionStore::Call;
@@ -75,7 +81,7 @@ public:
 		struct MainExit {};
 		struct ConditionalJump
 		{
-			ValueId condition;
+			InstId condition;
 			BlockId nonZero;
 			BlockId zero;
 		};
@@ -85,7 +91,7 @@ public:
 		};
 		struct FunctionReturn
 		{
-			std::vector<ValueId> returnValues;
+			std::vector<InstId> returnValues;
 		};
 		struct Terminated {};
 		std::vector<BlockId> entries;
@@ -132,34 +138,19 @@ public:
 	size_t numInsts() const { return m_instructions.numInsts(); }
 	std::vector<Inst> const& instructions() const { return m_instructions.instructions(); }
 
-	static auto outputsOf(InstId const _id, ValueId::OutputSize const _numOutputs)
-	{
-		return InstructionStore::outputsOf(_id, _numOutputs);
-	}
-
-	auto instOutputs(InstId const _id) const
-	{
-		return m_instructions.instOutputs(_id);
-	}
-
-	/// Returns the opcode category for a given ValueId.
-	InstOpcode kindOf(ValueId const _v) const { return m_instructions.kindOf(_v); }
+	/// Returns the opcode category for a given InstId.
+	InstOpcode kindOf(InstId const _id) const { return m_instructions.kindOf(_id); }
 
 	bool isPhi(InstId const _id) const { return inst(_id).isPhi(); }
-	bool isPhi(ValueId const _v) const { return isPhi(_v.instId()); }
 	bool isUpsilon(InstId const _id) const { return inst(_id).isUpsilon(); }
-	bool isUpsilon(ValueId const _v) const { return isUpsilon(_v.instId()); }
 	bool isLiteral(InstId const _id) const { return inst(_id).isLiteral(); }
-	bool isLiteral(ValueId const _v) const { return isLiteral(_v.instId()); }
 	bool isUnreachable(InstId const _id) const { return inst(_id).isUnreachable(); }
-	bool isUnreachable(ValueId const _v) const { return isUnreachable(_v.instId()); }
 	bool isFunctionArg(InstId const _id) const { return inst(_id).isFunctionArg(); }
-	bool isFunctionArg(ValueId const _v) const { return isFunctionArg(_v.instId()); }
+	bool isProjection(InstId const _id) const { return inst(_id).isProjection(); }
 	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
-	bool isOperation(ValueId const _v) const { return isOperation(_v.instId()); }
 
 	/// Returns the phi targeted by an Upsilon Inst.
-	ValueId upsilonPhi(InstId const _id) const { return m_instructions.upsilonPhi(_id); }
+	InstId upsilonPhi(InstId const _id) const { return m_instructions.upsilonPhi(_id); }
 
 	/// Returns the u256 payload of a Const Inst.
 	u256 const& literalPayload(InstId const _id) const { return m_instructions.literalPayload(_id); }
@@ -168,89 +159,81 @@ public:
 
 	Call const& callPayload(InstId const _id) const { return m_instructions.callPayload(_id); }
 
-	/// Creates a Phi Inst in the given block and returns its output ValueId.
-	ValueId newPhi(BlockId const _definingBlock)
+	/// Returns the projection index of a Projection Inst.
+	InstructionStore::NumReturnsSizeType projectionIndex(InstId const _id) const { return m_instructions.projectionIndex(_id); }
+
+	/// Creates a Phi Inst in the given block and returns its InstId.
+	InstId newPhi(BlockId const _definingBlock)
 	{
 		InstId const id = scheduleInBlock(m_instructions.appendPhi(_definingBlock), _definingBlock);
-		ValueId const v{id};
 		if (debugInfo)
-			debugInfo->setValueDebugData(v, debugInfo->blockDebugData(_definingBlock));
-		return v;
+			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(_definingBlock));
+		return id;
 	}
 
-	ValueId newFunctionArgument()
+	InstId newFunctionArgument()
 	{
 		InstId const id = scheduleInBlock(m_instructions.appendFunctionArg(entry), entry);
-		ValueId const v{id};
 		if (debugInfo)
-			debugInfo->setValueDebugData(v, debugInfo->blockDebugData(entry));
-		return v;
+			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(entry));
+		return id;
 	}
 
-	ValueId unreachableValue()
+	InstId unreachableValue()
 	{
-		return ValueId{m_instructions.appendUnreachable()};
+		return m_instructions.appendUnreachable();
 	}
 
-	/// Literal ValueIds are deduplicated. Const Insts are pinned to the entry block.
-	ValueId newLiteral(langutil::DebugData::ConstPtr _debugData, u256 _value)
+	/// Literal InstIds are deduplicated. Const Insts are pinned to the entry block.
+	InstId newLiteral(langutil::DebugData::ConstPtr _debugData, u256 _value)
 	{
-		auto const beforeCount = m_instructions.numInsts();
+		auto const previousNumInsts = m_instructions.numInsts();
 		InstId const id = m_instructions.appendLiteral(entry, std::move(_value));
-		ValueId const v{id};
 		// Newly allocated (not deduplicated): schedule in entry and attach debug data.
-		if (m_instructions.numInsts() > beforeCount)
+		if (m_instructions.numInsts() > previousNumInsts)
 		{
 			scheduleInBlock(id, entry);
 			if (debugInfo)
-				debugInfo->setValueDebugData(v, std::move(_debugData));
+				debugInfo->setValueDebugData(id, std::move(_debugData));
 		}
-		return v;
+		return id;
 	}
 
-	InstId makeBuiltinCall(
+	/// Allocates a BuiltinCall at `_block` and, for `_numReturns >= 2`, the `_numReturns` matching
+	/// Projections immediately after it in `m_insts`.
+	InstId makeBuiltinCallWithProjections(
 		BlockId const _block,
 		BuiltinCall _payload,
-		std::vector<ValueId> _inputs,
-		std::size_t const _numOutputs,
+		std::vector<InstId> _inputs,
+		InstructionStore::NumReturnsSizeType const _numReturns,
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
-		yulAssert(
-			_numOutputs <= ValueId::maxOutputs,
-			fmt::format("SSA CFG: BuiltinCall with {} outputs exceeds the maximum of {}.", _numOutputs, ValueId::maxOutputs)
-		);
-		InstId const id = scheduleInBlock(
-			m_instructions.appendBuiltinCall(_block, std::move(_payload), std::move(_inputs), _numOutputs),
-			_block
-		);
-		if (debugInfo && _debugData)
-			debugInfo->setInstDebugData(id, std::move(_debugData));
-		return id;
+		InstId const producer = makeBuiltinCall(_block, std::move(_payload), std::move(_inputs), _debugData);
+		if (_numReturns >= 2)
+			for (InstructionStore::NumReturnsSizeType i = 0; i < _numReturns; ++i)
+				makeProjection(_block, producer, _debugData);
+		return producer;
 	}
 
-	InstId makeCall(
+	/// Allocates a user Call at `_block` and, for `_numReturns >= 2`, the `_numReturns` matching
+	/// Projections immediately after it in `m_insts`. See `makeBuiltinCallWithProjections`.
+	InstId makeCallWithProjections(
 		BlockId const _block,
 		Call _payload,
-		std::vector<ValueId> _inputs,
-		std::size_t const _numOutputs,
+		std::vector<InstId> _inputs,
+		InstructionStore::NumReturnsSizeType const _numReturns,
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
-		yulAssert(
-			_numOutputs <= ValueId::maxOutputs,
-			fmt::format("SSA CFG: Call with {} outputs exceeds the maximum of {}.", _numOutputs, ValueId::maxOutputs)
-		);
-		InstId const id = scheduleInBlock(
-			m_instructions.appendCall(_block, std::move(_payload), std::move(_inputs), _numOutputs),
-			_block
-		);
-		if (debugInfo && _debugData)
-			debugInfo->setInstDebugData(id, std::move(_debugData));
-		return id;
+		InstId const producer = makeCall(_block, std::move(_payload), std::move(_inputs), _debugData);
+		if (_numReturns >= 2)
+			for (InstructionStore::NumReturnsSizeType i = 0; i < _numReturns; ++i)
+				makeProjection(_block, producer, _debugData);
+		return producer;
 	}
 
-	InstId emitUpsilon(BlockId const _block, ValueId _value, ValueId const _phi)
+	InstId emitUpsilon(BlockId const _block, InstId const _value, InstId const _phi)
 	{
 		return scheduleInBlock(m_instructions.appendUpsilon(_block, _value, _phi), _block);
 	}
@@ -278,7 +261,7 @@ public:
 	std::set<BlockId> exits;
 	std::string name{};
 	bool canContinue = true;
-	std::vector<ValueId> arguments;
+	std::vector<InstId> arguments;
 	std::size_t numReturns = 0;
 
 	bool isMainGraph() const { return name.empty(); }
@@ -307,20 +290,142 @@ public:
 		forEachInstWhere(*this, _block, &Inst::isUpsilon, std::forward<Callable>(_fn));
 	}
 
-	/// Iterates `_block.instructions`, invoking `_fn(instId, inst)` for every operation
-	/// (Call or BuiltinCall).
-	template<typename Callable>
+	/// Iterates `_block.instructions`, invoking `_fn(instId, inst)` for every operation. Trailing
+	/// Projections are skipped here; access them via `projectionsOf(instId)` / `forEachOutput(instId, ...)`.
+	template<std::invocable<InstId, Inst&> Callable>
 	void forEachOperation(BasicBlock const& _block, Callable&& _fn)
 	{
 		forEachInstWhere(*this, _block, &Inst::isOperation, std::forward<Callable>(_fn));
 	}
-	template<typename Callable>
+	template<std::invocable<InstId, Inst const&> Callable>
 	void forEachOperation(BasicBlock const& _block, Callable&& _fn) const
 	{
 		forEachInstWhere(*this, _block, &Inst::isOperation, std::forward<Callable>(_fn));
 	}
 
+	std::size_t numReturnsOf(InstId _op) const
+	{
+		auto const& i = inst(_op);
+		switch (i.opcode)
+		{
+		case InstOpcode::Call:
+			return callPayload(_op).numReturns;
+		case InstOpcode::BuiltinCall:
+			return evmDialect.builtin(builtinPayload(_op).builtin).numReturns;
+		default:
+			yulAssert(false, fmt::format("numReturnsOf called on non-operation inst {}", _op));
+		}
+	}
+
+	/// View over the contiguous trailing Projections of `_producer` in `m_insts`. Empty for ops with <= 1 returns.
+	/// Note this relies on the m_insts-contiguity invariant established by `make(Builtin)CallWithProjections`:
+	/// projections live at `m_insts[_producer.value+1..+numReturns]`.
+	InputRangeOf<InstId> auto projectionsOf(InstId const _producer) const
+	{
+		std::size_t const n = numReturnsOf(_producer);
+		std::size_t const count = n >= 2 ? n : 0;
+		std::size_t const firstIdx = static_cast<std::size_t>(_producer.value) + 1;
+		std::size_t const lastIdx = firstIdx + count;
+		// `appendInst` already caps `numInsts()` below `max(InstId::ValueType)`, so this also guarantees
+		// the casts to `InstId::ValueType` below cannot wrap.
+		yulAssert(
+			lastIdx <= numInsts(),
+			fmt::format(
+				"Producer {} declares {} returns but only {} trailing m_insts slots are available",
+				_producer, n, numInsts() - firstIdx
+			)
+		);
+		for (std::size_t v = firstIdx; v < lastIdx; ++v)
+		{
+			auto const& trailing = inst(InstId{static_cast<InstId::ValueType>(v)});
+			yulAssert(
+				trailing.isProjection() && trailing.inputs.size() == 1 && trailing.inputs.front() == _producer,
+				fmt::format("Trailing slot {} is not a Projection of producer {}", InstId{static_cast<InstId::ValueType>(v)}, _producer)
+			);
+		}
+		return
+			ranges::views::iota(static_cast<InstId::ValueType>(firstIdx), static_cast<InstId::ValueType>(lastIdx)) |
+			ranges::views::transform(&toInstId);
+	}
+
+	/// View over the logical outputs of `_producer` in stack order: the producer itself if it has a single return,
+	/// the trailing Projections if it has multiple, and an empty range otherwise.
+	InputRangeOf<InstId> auto outputsOf(InstId const _producer) const
+	{
+		std::size_t const n = numReturnsOf(_producer);
+		if (n >= 2)
+			return projectionsOf(_producer);
+		auto const firstIdx = static_cast<InstId::ValueType>(_producer.value);
+		return
+			ranges::views::iota(firstIdx, static_cast<InstId::ValueType>(firstIdx + n)) |
+			ranges::views::transform(&toInstId);
+	}
+
+	/// Invokes `_fn(InstId)` once per logical output of `_producer` in stack order.
+	template<std::invocable<InstId> Fn>
+	void forEachOutput(InstId const _producer, Fn&& _fn) const
+	{
+		for (InstId const id: outputsOf(_producer))
+			_fn(id);
+	}
+
 private:
+	static InstId toInstId(InstId::ValueType const _v) { return InstId{_v}; }
+
+	InstId makeBuiltinCall(
+		BlockId const _block,
+		BuiltinCall _payload,
+		std::vector<InstId> _inputs,
+		langutil::DebugData::ConstPtr _debugData = {}
+	)
+	{
+		InstId const id = scheduleInBlock(
+			m_instructions.appendBuiltinCall(_block, std::move(_payload), std::move(_inputs)),
+			_block
+		);
+		if (debugInfo && _debugData)
+			debugInfo->setInstDebugData(id, std::move(_debugData));
+		return id;
+	}
+
+	InstId makeCall(
+		BlockId const _block,
+		Call _payload,
+		std::vector<InstId> _inputs,
+		langutil::DebugData::ConstPtr _debugData = {}
+	)
+	{
+		InstId const id = scheduleInBlock(
+			m_instructions.appendCall(_block, std::move(_payload), std::move(_inputs)),
+			_block
+		);
+		if (debugInfo && _debugData)
+			debugInfo->setInstDebugData(id, std::move(_debugData));
+		return id;
+	}
+
+	InstId makeProjection(
+		BlockId const _block,
+		InstId const _producer,
+		langutil::DebugData::ConstPtr _debugData = {}
+	)
+	{
+		yulAssert(
+			_block == m_instructions.inst(_producer).block,
+			fmt::format(
+				"Projection must live in the producer's block (producer block={}, requested block={})",
+				m_instructions.inst(_producer).block.value, _block.value
+			)
+		);
+		InstId const id = scheduleInBlock(
+			m_instructions.appendProjection(_block, _producer),
+			_block
+		);
+		if (debugInfo && _debugData)
+			debugInfo->setValueDebugData(id, std::move(_debugData));
+		return id;
+	}
+
 	/// Shared implementation for the public `forEach*` overloads; works for both
 	/// `SSACFG&` and `SSACFG const&` since `_self.inst(id)` propagates const-ness.
 	template<typename Self, typename Pred, typename Callable>

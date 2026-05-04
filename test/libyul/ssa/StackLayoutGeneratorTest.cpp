@@ -79,24 +79,25 @@ protected:
 		_out << "IN: " << stackToString(blockLayout->stackIn) << "\\l\\\n";
 
 		std::size_t i = 0;
-		m_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const& inst) {
+		m_cfg.forEachOperation(block, [&](InstId const _instId, SSACFG::Inst const& _inst) {
 			yulAssert(i < blockLayout->operationIn.size());
 			auto operationStack = blockLayout->operationIn[i];
 
 			_out << "\\l\\\n";
 			_out << stackToString(operationStack) << "\\l\\\n";
 
-			if (inst.opcode == InstOpcode::Call)
-				_out << escapeLabel(m_controlFlow.functionGraph(m_cfg.callPayload(instId).graphID)->name);
+			if (_inst.opcode == InstOpcode::Call)
+				_out << escapeLabel(m_controlFlow.functionGraph(m_cfg.callPayload(_instId).graphID)->name);
 			else
-				_out << escapeLabel(m_cfg.evmDialect.builtin(m_cfg.builtinPayload(instId).builtin).name);
+				_out << escapeLabel(m_cfg.evmDialect.builtin(m_cfg.builtinPayload(_instId).builtin).name);
 			_out << "\\l\\\n";
 
-			yulAssert(inst.inputs.size() <= operationStack.size());
-			for (std::size_t j = 0; j < inst.inputs.size(); ++j)
+			yulAssert(_inst.inputs.size() <= operationStack.size());
+			for (std::size_t j = 0; j < _inst.inputs.size(); ++j)
 				operationStack.pop_back();
-			for (auto const& output: SSACFG::outputsOf(instId, inst.numOutputs))
-				operationStack.push_back(StackSlot::makeValueID(m_cfg, output));
+			m_cfg.forEachOutput(_instId, [&](InstId const output) {
+				operationStack.push_back(StackSlot::makeValue(m_cfg, output));
+			});
 			_out << stackToString(operationStack) << "\\l\\\n";
 			++i;
 		});

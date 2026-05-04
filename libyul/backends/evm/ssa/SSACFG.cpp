@@ -41,7 +41,7 @@ namespace
 
 /// Build a human-readable Phi/Upsilon annotation for a phi value.
 /// Shows which upsilons feed it, listed per predecessor block.
-std::string formatPhi(SSACFG const& _cfg, ValueId _phiId)
+std::string formatPhi(SSACFG const& _cfg, InstId _phiId)
 {
 	// Collect all upsilons targeting _phiId from the whole CFG.
 	std::vector<std::string> formattedUpsilons;
@@ -73,7 +73,7 @@ protected:
 	void writeBlockLabel(std::ostream& _out, BlockId _blockId) override
 	{
 		auto const& block = m_cfg.block(_blockId);
-		auto const valueToString = [&](ValueId const& valueId) { return valueId.str(m_cfg); };
+		auto const valueToString = [&](InstId const& valueId) { return valueId.str(m_cfg); };
 
 		if (m_liveness)
 		{
@@ -101,10 +101,10 @@ protected:
 			_out << fmt::format("\\\nBlock {}\\n", _blockId.value);
 
 		// Phis first, then BuiltinCall / Call in program order. Upsilons are rendered
-		// under successor phis (via formatPhi) and skipped here.
+		// under successor phis (via formatPhi) and skipped here. Trailing Projections of
+		// multi-return calls are rendered as standalone lines following their producer.
 		m_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
-			ValueId const phi{instId};
-			_out << fmt::format("phi{} := {}\\l\\\n", instId.value, formatPhi(m_cfg, phi));
+			_out << fmt::format("phi{} := {}\\l\\\n", instId.value, formatPhi(m_cfg, instId));
 		});
 		m_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const& inst) {
 			std::string label;
@@ -115,16 +115,20 @@ protected:
 			}
 			else
 				label = m_cfg.evmDialect.builtin(m_cfg.builtinPayload(instId).builtin).name;
-			if (inst.numOutputs > 0)
-				_out << fmt::format(
-					"{} := ",
-					fmt::join(SSACFG::outputsOf(instId, inst.numOutputs) | ranges::views::transform(valueToString), ", ")
-				);
+			if (m_cfg.numReturnsOf(instId) >= 1)
+				_out << fmt::format("{} := ", valueToString(instId));
 			_out << fmt::format(
 				"{}({})\\l\\\n",
 				escapeLabel(label),
 				fmt::join(inst.inputs | ranges::views::transform(valueToString), ", ")
 			);
+			for (InstId const projId: m_cfg.projectionsOf(instId))
+				_out << fmt::format(
+					"{} := {}.proj({})\\l\\\n",
+					valueToString(projId),
+					valueToString(instId),
+					static_cast<unsigned>(m_cfg.projectionIndex(projId))
+				);
 		});
 	}
 

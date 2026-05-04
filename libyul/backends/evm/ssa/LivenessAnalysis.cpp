@@ -23,6 +23,7 @@
 #include <range/v3/algorithm/count_if.hpp>
 #include <range/v3/range/conversion.hpp>
 
+#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/reverse.hpp>
 
@@ -83,7 +84,7 @@ void LivenessAnalysis::runDagDfs()
 		// live <- PhiUses(B)
 		LivenessData live{};
 		m_cfg.forEachUpsilon(block, [&](InstId, SSACFG::Inst const& inst) {
-			SSACFG::ValueId const v = inst.inputs.at(0);
+			InstId const v = inst.inputs.at(0);
 			yulAssert(!m_cfg.isUnreachable(v));
 			if (!m_cfg.isLiteral(v))
 				live.insert(v);
@@ -97,7 +98,7 @@ void LivenessAnalysis::runDagDfs()
 					// LiveIn(S) - PhiDefs(S)
 					auto liveInWithoutPhiDefs = m_liveIns[_successor.value];
 					m_cfg.forEachPhi(m_cfg.block(_successor), [&](InstId const succInstId, SSACFG::Inst const&) {
-						liveInWithoutPhiDefs.erase(ValueId{succInstId});
+						liveInWithoutPhiDefs.erase(succInstId);
 					});
 					live.maxUnion(liveInWithoutPhiDefs);
 				}
@@ -123,15 +124,15 @@ void LivenessAnalysis::runDagDfs()
 				if (!inst.isOperation())
 					continue;
 				// remove variables defined at p from live
-				live.eraseAll(SSACFG::outputsOf(instId, inst.numOutputs) | ranges::views::filter(excludingLiteralsFilter()));
-				// add uses at p to live
+				live.eraseAll(m_cfg.projectionsOf(instId));
+				live.erase(instId);
 				live.insertAll(inst.inputs | ranges::views::filter(excludingLiteralsFilter()));
 			}
 		}
 
 		// livein(b) <- live \cup PhiDefs(B)
 		m_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
-			live.insert(ValueId{instId});
+			live.insert(instId);
 		});
 		m_liveIns[blockId.value] = live;
 	}
@@ -147,7 +148,7 @@ void LivenessAnalysis::runLoopTreeDfs(SSACFG::BlockId::ValueType const _loopHead
 		// LiveLoop <- LiveIn(B_N) - PhiDefs(B_N)
 		auto liveLoop = m_liveIns[_loopHeader];
 		m_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
-			liveLoop.erase(ValueId{instId});
+			liveLoop.erase(instId);
 		});
 		// must be live out of header if live in of children
 		m_liveOuts[_loopHeader].maxUnion(liveLoop);
@@ -186,7 +187,8 @@ void LivenessAnalysis::fillOperationsLiveOut()
 				if (!inst.isOperation())
 					continue;
 				*rit = live;
-				live.eraseAll(SSACFG::outputsOf(instId, inst.numOutputs) | ranges::views::filter(excludingLiteralsFilter()));
+				live.eraseAll(m_cfg.projectionsOf(instId));
+				live.erase(instId);
 				live.insertAll(inst.inputs | ranges::views::filter(excludingLiteralsFilter()));
 				++rit;
 			}
