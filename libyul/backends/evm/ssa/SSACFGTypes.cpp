@@ -45,5 +45,5 @@ std::string InstId::str(SSACFG const& _cfg) const
 	case InstOpcode::Tombstone:
 		yulAssert(false, "Inst has no output value");
 	}
-	util::unreachable();
+	solidity::util::unreachable();
 }

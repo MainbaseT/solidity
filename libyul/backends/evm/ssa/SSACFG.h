@@ -203,7 +203,7 @@ public:
 	}
 
 	/// Allocates a BuiltinCall at `_block` and, for `_numReturns >= 2`, the `_numReturns` matching
-	/// Projections immediately after it in `m_insts`.
+	/// Projections immediately after it in `m_insts` as a single contiguous cluster.
 	InstId makeBuiltinCallWithProjections(
 		BlockId const _block,
 		BuiltinCall _payload,
@@ -212,15 +212,26 @@ public:
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
-		InstId const producer = makeBuiltinCall(_block, std::move(_payload), std::move(_inputs), _debugData);
-		if (_numReturns >= 2)
-			for (InstructionStore::NumReturnsSizeType i = 0; i < _numReturns; ++i)
-				makeProjection(_block, producer, _debugData);
+		if (_numReturns < 2)
+			return makeBuiltinCall(_block, std::move(_payload), std::move(_inputs), _debugData);
+		InstId const producer = m_instructions.appendBuiltinCallWithProjections(
+			_block, std::move(_payload), std::move(_inputs), _numReturns
+		);
+		scheduleInBlock(producer, _block);
+		if (debugInfo && _debugData)
+			debugInfo->setInstDebugData(producer, _debugData);
+		for (InstructionStore::NumReturnsSizeType k = 0; k < _numReturns; ++k)
+		{
+			InstId const projId{producer.value + 1u + k};
+			scheduleInBlock(projId, _block);
+			if (debugInfo && _debugData)
+				debugInfo->setValueDebugData(projId, _debugData);
+		}
 		return producer;
 	}
 
 	/// Allocates a user Call at `_block` and, for `_numReturns >= 2`, the `_numReturns` matching
-	/// Projections immediately after it in `m_insts`. See `makeBuiltinCallWithProjections`.
+	/// Projections immediately after it in `m_insts` as a single contiguous cluster.
 	InstId makeCallWithProjections(
 		BlockId const _block,
 		Call _payload,
@@ -229,10 +240,22 @@ public:
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
-		InstId const producer = makeCall(_block, std::move(_payload), std::move(_inputs), _debugData);
-		if (_numReturns >= 2)
-			for (InstructionStore::NumReturnsSizeType i = 0; i < _numReturns; ++i)
-				makeProjection(_block, producer, _debugData);
+		if (_numReturns < 2)
+			return makeCall(_block, std::move(_payload), std::move(_inputs), _debugData);
+		yulAssert(_payload.numReturns == _numReturns, "Call payload's numReturns disagrees with caller's _numReturns");
+		InstId const producer = m_instructions.appendCallWithProjections(
+			_block, std::move(_payload), std::move(_inputs)
+		);
+		scheduleInBlock(producer, _block);
+		if (debugInfo && _debugData)
+			debugInfo->setInstDebugData(producer, _debugData);
+		for (InstructionStore::NumReturnsSizeType k = 0; k < _numReturns; ++k)
+		{
+			InstId const projId{producer.value + 1u + k};
+			scheduleInBlock(projId, _block);
+			if (debugInfo && _debugData)
+				debugInfo->setValueDebugData(projId, _debugData);
+		}
 		return producer;
 	}
 
@@ -435,28 +458,6 @@ private:
 		);
 		if (debugInfo && _debugData)
 			debugInfo->setInstDebugData(id, std::move(_debugData));
-		return id;
-	}
-
-	InstId makeProjection(
-		BlockId const _block,
-		InstId const _producer,
-		langutil::DebugData::ConstPtr _debugData = {}
-	)
-	{
-		yulAssert(
-			_block == m_instructions.inst(_producer).block,
-			fmt::format(
-				"Projection must live in the producer's block (producer block={}, requested block={})",
-				m_instructions.inst(_producer).block.value, _block.value
-			)
-		);
-		InstId const id = scheduleInBlock(
-			m_instructions.appendProjection(_block, _producer),
-			_block
-		);
-		if (debugInfo && _debugData)
-			debugInfo->setValueDebugData(id, std::move(_debugData));
 		return id;
 	}
 
