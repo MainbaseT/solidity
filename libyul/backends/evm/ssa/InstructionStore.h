@@ -19,10 +19,16 @@
  * Owns the instruction table of an SSACFG: hands out InstIds, stores opcode
  * payloads, and provides lookups. Has no knowledge of basic blocks or debug
  * information; SSACFG composes those concerns on top.
+ *
+ * Each Inst owns its payload directly via `std::unique_ptr<Payload>`. Tombstoning
+ * an Inst (or flipping it via `replaceWith*`) resets the unique_ptr, releasing
+ * the variant and any heap memory it transitively held. Slot storage and the free-list bookkeeping
+ * live together in `m_insts`. Literal payloads are deduplicated through `m_literalDedup`.
  */
 
 #pragma once
 
+#include <libyul/backends/evm/ssa/util/TLSFFreeList.h>
 #include <libyul/backends/evm/ssa/SSACFGTypes.h>
 
 #include <libyul/AST.h>
@@ -34,6 +40,9 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <memory>
+#include <utility>
+#include <variant>
 #include <vector>
 
 namespace solidity::yul::ssa
@@ -42,11 +51,10 @@ namespace solidity::yul::ssa
 class InstructionStore
 {
 public:
-	/// Sentinel value for `Inst::payloadIndex` when the opcode has no side-table payload.
-	static constexpr std::uint32_t NoPayload = std::numeric_limits<std::uint32_t>::max();
-
 	using NumReturnsSizeType = std::uint8_t;
 
+	struct LiteralPayload { u256 value; };
+	struct UpsilonPayload { InstId targetPhi; };
 	struct BuiltinCall
 	{
 		BuiltinHandle builtin;
@@ -59,12 +67,20 @@ public:
 		bool canContinue;
 		std::size_t numReturns;
 	};
+
+	using Payload = std::variant<
+		LiteralPayload,
+		UpsilonPayload,
+		BuiltinCall,
+		Call
+	>;
+
 	struct Inst
 	{
 		InstOpcode opcode;
-		std::uint32_t payloadIndex = NoPayload;
 		BlockId block{};
 		std::vector<InstId> inputs{};
+		std::unique_ptr<Payload> payload{};
 
 		constexpr bool isPhi() const noexcept { return opcode == InstOpcode::Phi; }
 		constexpr bool isUpsilon() const noexcept { return opcode == InstOpcode::Upsilon; }
@@ -72,6 +88,9 @@ public:
 		constexpr bool isUnreachable() const noexcept { return opcode == InstOpcode::Unreachable; }
 		constexpr bool isFunctionArg() const noexcept { return opcode == InstOpcode::FunctionArg; }
 		constexpr bool isProjection() const noexcept { return opcode == InstOpcode::Projection; }
+		constexpr bool isIdentity() const noexcept { return opcode == InstOpcode::Identity; }
+		constexpr bool isNop() const noexcept { return opcode == InstOpcode::Nop; }
+		constexpr bool isTombstone() const noexcept { return opcode == InstOpcode::Tombstone; }
 		/// Operation = a Call or BuiltinCall.
 		constexpr bool isOperation() const noexcept
 		{
@@ -86,23 +105,23 @@ public:
 	InstructionStore& operator=(InstructionStore&&) = default;
 	~InstructionStore() = default;
 
-	Inst& inst(InstId _id) { return m_insts.at(_id.value); }
-	Inst const& inst(InstId _id) const { return m_insts.at(_id.value); }
+	Inst& inst(InstId _id) { return m_insts[_id.value]; }
+	Inst const& inst(InstId _id) const { return m_insts[_id.value]; }
 	std::size_t numInsts() const { return m_insts.size(); }
-	std::vector<Inst> const& instructions() const { return m_insts; }
+	std::vector<Inst> const& instructions() const { return m_insts.data(); }
 
 	/// Returns the opcode category for a given InstId.
 	InstOpcode kindOf(InstId const _id) const { return inst(_id).opcode; }
 
 	/// Returns the phi targeted by an Upsilon Inst.
-	InstId upsilonPhi(InstId const _id) const { return payloadAs<InstOpcode::Upsilon>(_id, m_upsilonPhis); }
+	InstId upsilonPhi(InstId const _id) const { return payloadAs<InstOpcode::Upsilon, UpsilonPayload>(_id).targetPhi; }
 
 	/// Returns the u256 payload of a Const Inst.
-	u256 const& literalPayload(InstId const _id) const { return payloadAs<InstOpcode::Const>(_id, m_literalPayloads); }
+	u256 const& literalPayload(InstId const _id) const { return payloadAs<InstOpcode::Const, LiteralPayload>(_id).value; }
 
-	BuiltinCall const& builtinPayload(InstId const _id) const { return payloadAs<InstOpcode::BuiltinCall>(_id, m_builtinPayloads); }
+	BuiltinCall const& builtinPayload(InstId const _id) const { return payloadAs<InstOpcode::BuiltinCall, BuiltinCall>(_id); }
 
-	Call const& callPayload(InstId const _id) const { return payloadAs<InstOpcode::Call>(_id, m_callPayloads); }
+	Call const& callPayload(InstId const _id) const { return payloadAs<InstOpcode::Call, Call>(_id); }
 
 	/// Returns the projection index of a Projection Inst
 	NumReturnsSizeType projectionIndex(InstId const _id) const
@@ -117,22 +136,47 @@ public:
 		return static_cast<NumReturnsSizeType>(offset);
 	}
 
+	/// Counts the trailing Projections immediately following `_producer` in `m_insts`
+	NumReturnsSizeType numTrailingProjections(InstId const _producer) const
+	{
+		auto const& producerInst = inst(_producer);
+		if (!producerInst.isOperation())
+			return 0;
+		std::size_t count = 0;
+		while (true)
+		{
+			std::size_t const idx = static_cast<std::size_t>(_producer.value) + 1u + count;
+			if (idx >= m_insts.size())
+				break;
+			using IndexType = util::TLSFFreeList<Inst, InstTombstone>::Index;
+			yulAssert(idx < std::numeric_limits<IndexType>::max());
+			auto const& trailing = m_insts[static_cast<IndexType>(idx)];
+			if (!trailing.isProjection())
+				break;
+			yulAssert(trailing.inputs.size() == 1);
+			yulAssert(trailing.inputs.front() == _producer);
+			++count;
+			yulAssert(count <= std::numeric_limits<NumReturnsSizeType>::max());
+		}
+		return static_cast<NumReturnsSizeType>(count);
+	}
+
 	/// Allocates a new Phi Inst defined in `_definingBlock`. Returns the new InstId.
 	InstId appendPhi(BlockId const _definingBlock)
 	{
-		return appendInst(Inst{InstOpcode::Phi, NoPayload, _definingBlock, {}});
+		return appendInst(Inst{InstOpcode::Phi, _definingBlock, {}, nullptr});
 	}
 
 	/// Allocates a new FunctionArg Inst defined in `_entryBlock`. Returns the new InstId.
 	InstId appendFunctionArg(BlockId const _entryBlock)
 	{
-		return appendInst(Inst{InstOpcode::FunctionArg, NoPayload, _entryBlock, {}});
+		return appendInst(Inst{InstOpcode::FunctionArg, _entryBlock, {}, nullptr});
 	}
 
 	/// Allocates a new Unreachable Inst. Not pinned to any block (see class comment).
 	InstId appendUnreachable()
 	{
-		return appendInst(Inst{InstOpcode::Unreachable, NoPayload, BlockId{}, {}});
+		return appendInst(Inst{InstOpcode::Unreachable, BlockId{}, {}, nullptr});
 	}
 
 	/// Allocates a new Const Inst with payload `_value`, pinned to `_entryBlock`.
@@ -142,13 +186,19 @@ public:
 		yulAssert(_entryBlock.hasValue());
 		if (auto const it = m_literalDedup.find(_value); it != m_literalDedup.end())
 			return it->second;
-		auto const payloadIdx = allocPayload(m_literalPayloads, _value);
-		InstId const id = appendInst(Inst{InstOpcode::Const, payloadIdx, _entryBlock, {}});
+		InstId const id = appendInst(Inst{
+			InstOpcode::Const,
+			_entryBlock,
+			{},
+			std::make_unique<Payload>(LiteralPayload{_value})
+		});
 		m_literalDedup.emplace(std::move(_value), id);
 		return id;
 	}
 
-	/// Allocates a new BuiltinCall Inst. Returns the new InstId.
+	/// Allocates a new single-output BuiltinCall Inst. Returns the new InstId.
+	/// For multi-output BuiltinCalls, use `appendBuiltinCallWithProjections` so the
+	/// producer + projections land in a contiguous cluster.
 	InstId appendBuiltinCall(
 		BlockId const _block,
 		BuiltinCall _payload,
@@ -158,13 +208,15 @@ public:
 		yulAssert(_block.hasValue());
 		return appendInst(Inst{
 			InstOpcode::BuiltinCall,
-			allocPayload(m_builtinPayloads, std::move(_payload)),
 			_block,
-			std::move(_inputs)
+			std::move(_inputs),
+			std::make_unique<Payload>(std::move(_payload))
 		});
 	}
 
-	/// Allocates a new Call Inst. Returns the new InstId.
+	/// Allocates a new single-output Call Inst. Returns the new InstId.
+	/// For multi-output Calls, use `appendCallWithProjections` so the producer +
+	/// projections land in a contiguous cluster.
 	InstId appendCall(
 		BlockId const _block,
 		Call _payload,
@@ -172,65 +224,226 @@ public:
 	)
 	{
 		yulAssert(_block.hasValue());
+		yulAssert(_payload.numReturns < 2, "Multi-return Call must use appendCallWithProjections");
 		return appendInst(Inst{
 			InstOpcode::Call,
-			allocPayload(m_callPayloads, std::move(_payload)),
 			_block,
-			std::move(_inputs)
+			std::move(_inputs),
+			std::make_unique<Payload>(std::move(_payload))
 		});
 	}
 
-	/// Allocates a new Projection Inst projecting output `_index` of `_producer`.
-	InstId appendProjection(BlockId const _block, InstId const _producer)
+	/// Allocates a multi-return BuiltinCall along with its `_numReturns` trailing
+	/// Projections in a contiguous cluster (length `1 + _numReturns`). Returns the
+	/// producer's InstId; projections live at `producer.value + 1 .. + _numReturns`
+	/// and the caller can read them via `SSACFG::projectionsOf`.
+	InstId appendBuiltinCallWithProjections(
+		BlockId const _block,
+		BuiltinCall _payload,
+		std::vector<InstId> _inputs,
+		NumReturnsSizeType const _numReturns
+	)
 	{
 		yulAssert(_block.hasValue());
-		yulAssert(_producer.hasValue());
-		return appendInst(Inst{InstOpcode::Projection, NoPayload, _block, {_producer}});
+		yulAssert(_numReturns >= 2, "appendBuiltinCallWithProjections requires _numReturns >= 2");
+		std::uint32_t const length = static_cast<std::uint32_t>(_numReturns) + 1u;
+		std::uint32_t const start = reserveRun(length);
+		InstId const producerId{start};
+		m_insts[start] = Inst{
+			InstOpcode::BuiltinCall,
+			_block,
+			std::move(_inputs),
+			std::make_unique<Payload>(std::move(_payload))
+		};
+		for (NumReturnsSizeType k = 0; k < _numReturns; ++k)
+			m_insts[start + 1u + k] = Inst{InstOpcode::Projection, _block, {producerId}, nullptr};
+		return producerId;
+	}
+
+	/// Allocates a multi-return Call along with its `_payload.numReturns` trailing
+	/// Projections in a contiguous cluster. See `appendBuiltinCallWithProjections`.
+	InstId appendCallWithProjections(
+		BlockId const _block,
+		Call _payload,
+		std::vector<InstId> _inputs
+	)
+	{
+		yulAssert(_block.hasValue());
+		yulAssert(_payload.numReturns >= 2, "appendCallWithProjections requires _payload.numReturns >= 2");
+		yulAssert(_payload.numReturns <= std::numeric_limits<NumReturnsSizeType>::max());
+		auto const numReturns = static_cast<NumReturnsSizeType>(_payload.numReturns);
+		std::uint32_t const length = static_cast<std::uint32_t>(numReturns) + 1u;
+		std::uint32_t const start = reserveRun(length);
+		InstId const producerId{start};
+		m_insts[start] = Inst{
+			InstOpcode::Call,
+			_block,
+			std::move(_inputs),
+			std::make_unique<Payload>(std::move(_payload))
+		};
+		for (NumReturnsSizeType k = 0; k < numReturns; ++k)
+			m_insts[start + 1u + k] = Inst{InstOpcode::Projection, _block, {producerId}, nullptr};
+		return producerId;
 	}
 
 	/// Allocates a new Upsilon Inst targeting `_phi`, feeding `_value` from `_block`.
 	InstId appendUpsilon(BlockId const _block, InstId const _value, InstId const _phi)
 	{
 		yulAssert(inst(_phi).isPhi());
-		return appendInst(Inst{InstOpcode::Upsilon, allocPayload(m_upsilonPhis, _phi), _block, {_value}});
+		return appendInst(Inst{
+			InstOpcode::Upsilon,
+			_block,
+			{_value},
+			std::make_unique<Payload>(UpsilonPayload{_phi})
+		});
+	}
+
+	/// Flips _target to Identity forwarding _forward.
+	void replaceWithIdentity(InstId const _target, InstId const _forward)
+	{
+		yulAssert(_target.hasValue());
+		yulAssert(_forward.hasValue());
+		yulAssert(_target != _forward, "Cannot replace value with itself");
+		auto& instruction = inst(_target);
+		// every Const InstId is the unique handle for its value, so flipping it to Identity would silently rebind
+		// every other user of that literal to _forward; almost certainly not what was intended
+		yulAssert(!instruction.isLiteral(), "replaceWithIdentity must not morph a deduped Const slot");
+		yulAssert(
+			numTrailingProjections(_target) == 0,
+			"replaceWithIdentity must not morph a multi-return producer slot"
+		);
+		instruction.opcode = InstOpcode::Identity;
+		instruction.inputs.assign(1, _forward);
+		instruction.payload.reset();
+	}
+
+	/// Flips _target to Const carrying _value. If _value is already deduped to another slot,
+	/// flips _target to Identity forwarding to that slot instead.
+	void replaceWithConst(InstId const _target, u256 const& _value)
+	{
+		yulAssert(_target.hasValue());
+		auto& instruction = inst(_target);
+		yulAssert(
+			numTrailingProjections(_target) == 0,
+			"replaceWithConst must not morph a multi-return producer slot"
+		);
+		// No-op if already this value.
+		if (instruction.opcode == InstOpcode::Const && std::get<LiteralPayload>(*instruction.payload).value == _value)
+			return;
+		dropDedupIfConst(instruction);
+		if (auto const it = m_literalDedup.find(_value); it != m_literalDedup.end())
+		{
+			instruction.opcode = InstOpcode::Identity;
+			instruction.inputs.assign(1, it->second);
+			instruction.payload.reset();
+			return;
+		}
+		instruction.opcode = InstOpcode::Const;
+		instruction.inputs.clear();
+		instruction.payload = std::make_unique<Payload>(LiteralPayload{_value});
+		m_literalDedup.emplace(std::move(_value), _target);
+	}
+
+	/// Flips _target to Nop. Caller must ensure _target produces no observable value (e.g., an Upsilon, or a void Call).
+	void replaceWithNop(InstId const _target)
+	{
+		yulAssert(_target.hasValue());
+		auto& instruction = inst(_target);
+		yulAssert(
+			numTrailingProjections(_target) == 0,
+			"replaceWithNop must not morph a multi-return producer slot"
+		);
+		dropDedupIfConst(instruction);
+		instruction.opcode = InstOpcode::Nop;
+		instruction.inputs.clear();
+		instruction.payload.reset();
+	}
+
+	/// Tombstones an Inst, releasing its slot(s) to the free pool. If `_id` is a
+	/// multi-return producer (i.e. has trailing Projections), the entire cluster
+	/// is swept and released as one contiguous run.
+	void tombstone(InstId const _id)
+	{
+		yulAssert(_id.hasValue());
+		auto const& instruction = inst(_id);
+		if (instruction.isTombstone())
+			return;
+
+		yulAssert(
+			!instruction.isProjection(),
+			"illegal call of tombstone(_id) on a Projection, tombstone the producer instead"
+		);
+		std::uint32_t const trailingCount = numTrailingProjections(_id);
+		dropDedupIfConst(instruction);
+		// tombstone this inst and all trailing projections
+		m_insts.deallocate(_id.value, trailingCount + 1u);
 	}
 
 private:
-	InstId appendInst(Inst _inst)
+	/// Allocates a new Projection Inst projecting output of `_producer`.
+	InstId appendProjection(BlockId const _block, InstId const _producer)
 	{
-		// max itself is reserved for the 'empty' inst
-		yulAssert(m_insts.size() < std::numeric_limits<InstId::ValueType>::max());
-		InstId const id{static_cast<InstId::ValueType>(m_insts.size())};
-		m_insts.emplace_back(std::move(_inst));
-		return id;
+		yulAssert(_block.hasValue());
+		yulAssert(_producer.hasValue());
+		return appendInst(Inst{InstOpcode::Projection, _block, {_producer}, nullptr});
 	}
 
-	/// Asserts that the Inst at `_id` has opcode `Expected`, then returns its payload from `_store`.
-	template<InstOpcode Expected, typename Store>
-	typename Store::value_type const& payloadAs(InstId const _id, Store const& _store) const
+	/// Single-slot append: takes a length-1 run from the free pool if available, else
+	/// tail-extends.
+	InstId appendInst(Inst _inst)
+	{
+		yulAssert(m_insts.size() < std::numeric_limits<InstId::ValueType>::max());
+		std::uint32_t const idx = m_insts.allocate(1);
+		m_insts[idx] = std::move(_inst);
+		return InstId{idx};
+	}
+
+	/// Reserves a contiguous run of `_length` slots in `m_insts`, returning the start
+	/// index. The façade applies a smallest-fit policy with split-on-take and
+	/// tail-extends with Tombstone placeholders on miss; reused cluster slots
+	/// arrive already in tombstoned state.
+	std::uint32_t reserveRun(std::uint32_t const _length)
+	{
+		yulAssert(_length >= 2, "reserveRun is for clusters; use appendInst for single slots");
+		yulAssert(m_insts.size() < std::numeric_limits<InstId::ValueType>::max() - _length);
+		return m_insts.allocate(_length);
+	}
+
+	/// Asserts that the Inst at `_id` has opcode `Expected`, then returns its payload as `T`.
+	template<InstOpcode Expected, typename T>
+	T const& payloadAs(InstId const _id) const
 	{
 		auto const& i = inst(_id);
 		yulAssert(i.opcode == Expected);
-		return _store.at(i.payloadIndex);
+		yulAssert(i.payload);
+		return std::get<T>(*i.payload);
 	}
 
-	/// Pushes `_payload` into `_store` and returns the resulting payload index. Asserts
-	/// the index fits in payloadIndex's u32 representation (max is reserved for NoPayload).
-	template<typename T>
-	std::uint32_t allocPayload(std::vector<T>& _store, T _payload)
+	/// If `_inst` is a Const, removes its entry from the literal dedup table. Used by
+	/// the replaceWith* primitives and tombstone() before overwriting the slot.
+	void dropDedupIfConst(Inst const& _inst)
 	{
-		yulAssert(_store.size() < NoPayload);
-		auto const idx = static_cast<std::uint32_t>(_store.size());
-		_store.push_back(std::move(_payload));
-		return idx;
+		if (_inst.opcode != InstOpcode::Const)
+			return;
+		yulAssert(_inst.payload);
+		u256 const& value = std::get<LiteralPayload>(*_inst.payload).value;
+		m_literalDedup.erase(value);
 	}
 
-	std::vector<Inst> m_insts;
-	std::vector<u256> m_literalPayloads;
+	struct InstTombstone
+	{
+		static Inst make() noexcept
+		{
+			return Inst{InstOpcode::Tombstone, BlockId{}, {}, nullptr};
+		}
+		static bool isTombstone(Inst const& _i) noexcept
+		{
+			return _i.opcode == InstOpcode::Tombstone;
+		}
+	};
+
+	util::TLSFFreeList<Inst, InstTombstone> m_insts;
 	std::map<u256, InstId> m_literalDedup;
-	std::vector<InstId> m_upsilonPhis;
-	std::vector<BuiltinCall> m_builtinPayloads;
-	std::vector<Call> m_callPayloads;
 };
 
 }

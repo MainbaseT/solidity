@@ -147,7 +147,23 @@ public:
 	bool isUnreachable(InstId const _id) const { return inst(_id).isUnreachable(); }
 	bool isFunctionArg(InstId const _id) const { return inst(_id).isFunctionArg(); }
 	bool isProjection(InstId const _id) const { return inst(_id).isProjection(); }
+	bool isIdentity(InstId const _id) const { return inst(_id).isIdentity(); }
+	bool isNop(InstId const _id) const { return inst(_id).isNop(); }
+	bool isTombstone(InstId const _id) const { return inst(_id).isTombstone(); }
 	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
+
+	/// Walks the Identity chain starting at `_id` and returns the terminal (non-Identity) target.
+	InstId resolveIdentity(InstId _id) const
+	{
+		while (_id.hasValue() && kindOf(_id) == InstOpcode::Identity)
+		{
+			auto const& i = inst(_id);
+			yulAssert(i.inputs.size() == 1);
+			yulAssert(i.inputs[0] != _id, "Identity self-loop");
+			_id = i.inputs[0];
+		}
+		return _id;
+	}
 
 	/// Returns the phi targeted by an Upsilon Inst.
 	InstId upsilonPhi(InstId const _id) const { return m_instructions.upsilonPhi(_id); }
@@ -200,7 +216,7 @@ public:
 	}
 
 	/// Allocates a BuiltinCall at `_block` and, for `_numReturns >= 2`, the `_numReturns` matching
-	/// Projections immediately after it in `m_insts`.
+	/// Projections immediately after it in `m_insts` as a single contiguous cluster.
 	InstId makeBuiltinCallWithProjections(
 		BlockId const _block,
 		BuiltinCall _payload,
@@ -209,15 +225,26 @@ public:
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
-		InstId const producer = makeBuiltinCall(_block, std::move(_payload), std::move(_inputs), _debugData);
-		if (_numReturns >= 2)
-			for (InstructionStore::NumReturnsSizeType i = 0; i < _numReturns; ++i)
-				makeProjection(_block, producer, _debugData);
+		if (_numReturns < 2)
+			return makeBuiltinCall(_block, std::move(_payload), std::move(_inputs), _debugData);
+		InstId const producer = m_instructions.appendBuiltinCallWithProjections(
+			_block, std::move(_payload), std::move(_inputs), _numReturns
+		);
+		scheduleInBlock(producer, _block);
+		if (debugInfo && _debugData)
+			debugInfo->setInstDebugData(producer, _debugData);
+		for (InstructionStore::NumReturnsSizeType k = 0; k < _numReturns; ++k)
+		{
+			InstId const projId{producer.value + 1u + k};
+			scheduleInBlock(projId, _block);
+			if (debugInfo && _debugData)
+				debugInfo->setValueDebugData(projId, _debugData);
+		}
 		return producer;
 	}
 
 	/// Allocates a user Call at `_block` and, for `_numReturns >= 2`, the `_numReturns` matching
-	/// Projections immediately after it in `m_insts`. See `makeBuiltinCallWithProjections`.
+	/// Projections immediately after it in `m_insts` as a single contiguous cluster.
 	InstId makeCallWithProjections(
 		BlockId const _block,
 		Call _payload,
@@ -226,16 +253,59 @@ public:
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
-		InstId const producer = makeCall(_block, std::move(_payload), std::move(_inputs), _debugData);
-		if (_numReturns >= 2)
-			for (InstructionStore::NumReturnsSizeType i = 0; i < _numReturns; ++i)
-				makeProjection(_block, producer, _debugData);
+		if (_numReturns < 2)
+			return makeCall(_block, std::move(_payload), std::move(_inputs), _debugData);
+		yulAssert(_payload.numReturns == _numReturns, "Call payload's numReturns disagrees with caller's _numReturns");
+		InstId const producer = m_instructions.appendCallWithProjections(
+			_block, std::move(_payload), std::move(_inputs)
+		);
+		scheduleInBlock(producer, _block);
+		if (debugInfo && _debugData)
+			debugInfo->setInstDebugData(producer, _debugData);
+		for (InstructionStore::NumReturnsSizeType k = 0; k < _numReturns; ++k)
+		{
+			InstId const projId{producer.value + 1u + k};
+			scheduleInBlock(projId, _block);
+			if (debugInfo && _debugData)
+				debugInfo->setValueDebugData(projId, _debugData);
+		}
 		return producer;
 	}
 
 	InstId emitUpsilon(BlockId const _block, InstId const _value, InstId const _phi)
 	{
 		return scheduleInBlock(m_instructions.appendUpsilon(_block, _value, _phi), _block);
+	}
+
+	/// Flips _target's opcode to Identity forwarding _forward
+	void replaceWithIdentity(InstId const _target, InstId const _forward)
+	{
+		m_instructions.replaceWithIdentity(_target, _forward);
+	}
+
+	/// Flips _target to Const carrying _value
+	void replaceWithConst(InstId const _target, u256 _value)
+	{
+		m_instructions.replaceWithConst(_target, std::move(_value));
+	}
+
+	/// Flips _target to Nop. Caller must ensure _target produces no observable value
+	void replaceWithNop(InstId const _target)
+	{
+		m_instructions.replaceWithNop(_target);
+	}
+
+	/// Tombstones an Inst, sweeping any trailing Projection cluster too
+	void tombstone(InstId const _id)
+	{
+		m_instructions.tombstone(_id);
+	}
+
+	/// Returns the number of Projections trailing `_producer` in `m_insts` (0 for
+	/// non-multi-return slots). Thin wrapper around `InstructionStore::numTrailingProjections`.
+	InstructionStore::NumReturnsSizeType numTrailingProjections(InstId const _producer) const
+	{
+		return m_instructions.numTrailingProjections(_producer);
 	}
 
 	std::string toDot(
@@ -401,28 +471,6 @@ private:
 		);
 		if (debugInfo && _debugData)
 			debugInfo->setInstDebugData(id, std::move(_debugData));
-		return id;
-	}
-
-	InstId makeProjection(
-		BlockId const _block,
-		InstId const _producer,
-		langutil::DebugData::ConstPtr _debugData = {}
-	)
-	{
-		yulAssert(
-			_block == m_instructions.inst(_producer).block,
-			fmt::format(
-				"Projection must live in the producer's block (producer block={}, requested block={})",
-				m_instructions.inst(_producer).block.value, _block.value
-			)
-		);
-		InstId const id = scheduleInBlock(
-			m_instructions.appendProjection(_block, _producer),
-			_block
-		);
-		if (debugInfo && _debugData)
-			debugInfo->setValueDebugData(id, std::move(_debugData));
 		return id;
 	}
 

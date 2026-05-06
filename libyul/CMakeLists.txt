@@ -104,12 +104,15 @@ add_library(yul
 	backends/evm/ssa/StackSlotLiveness.h
 	backends/evm/ssa/StackToMemorySpilling.h
 	backends/evm/ssa/util/UseCountSet.h
+	backends/evm/ssa/util/TLSFFreeList.h
 	backends/evm/ssa/StackUtils.cpp
 	backends/evm/ssa/StackUtils.h
 	backends/evm/ssa/io/DotExporterBase.cpp
 	backends/evm/ssa/io/DotExporterBase.h
 	backends/evm/ssa/io/JSONExporter.cpp
 	backends/evm/ssa/io/JSONExporter.h
+	backends/evm/ssa/transform/IdentityAndNopRemover.cpp
+	backends/evm/ssa/transform/IdentityAndNopRemover.h
 	backends/evm/ssa/transform/TrivialPhiEliminator.cpp
 	backends/evm/ssa/transform/TrivialPhiEliminator.h
 	backends/evm/ssa/transform/UnreachableBlockCleaner.cpp
