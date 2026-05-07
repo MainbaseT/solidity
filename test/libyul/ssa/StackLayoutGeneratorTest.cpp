@@ -26,6 +26,8 @@
 #include <libyul/backends/evm/ssa/StackLayoutGenerator.h>
 #include <libyul/backends/evm/ssa/StackUtils.h>
 
+#include <libyul/backends/evm/ssa/transform/OptimizationPipeline.h>
+
 #include <libyul/Common.h>
 #include <libyul/YulStack.h>
 
@@ -154,6 +156,7 @@ frontend::test::TestCase::TestResult StackLayoutGeneratorTest::run(std::ostream&
 			object.code()->root(),
 			false
 		);
+		yul::ssa::transform::optimize(*controlFlowGraphs);
 		// insert separator
 		if (!m_obtainedResult.empty())
 			m_obtainedResult += SUBOBJECT_GRAPH_SEPARATOR;

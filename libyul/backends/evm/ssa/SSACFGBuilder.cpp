@@ -21,10 +21,6 @@
 
 #include <libyul/backends/evm/ssa/SSACFGBuilder.h>
 
-#include <libyul/backends/evm/ssa/transform/IdentityAndNopRemover.h>
-#include <libyul/backends/evm/ssa/transform/TrivialPhiEliminator.h>
-#include <libyul/backends/evm/ssa/transform/UnreachableBlockCleaner.h>
-
 #include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 
 #include <libyul/AST.h>
@@ -90,9 +86,6 @@ std::unique_ptr<ControlFlowGraphs> SSACFGBuilder::build(
 	if (!builder.blockInfo(builder.m_currentBlock).sealed)
 		builder.sealBlock(builder.m_currentBlock);
 	mainGraph.block(builder.m_currentBlock).exit = SSACFG::BasicBlock::MainExit{};
-	transform::cleanUnreachableBlocks(mainGraph);
-	transform::eliminateTrivialPhis(mainGraph);
-	transform::removeIdentitiesAndNops(mainGraph);
 	return controlFlowGraphs;
 }
 
@@ -141,9 +134,6 @@ void SSACFGBuilder::buildFunctionGraph(
 	cfg.exits.insert(builder.m_currentBlock);
 	// Artificial explicit function exit (`leave`) at the end of the body.
 	builder(Leave{debugDataOf(*_functionDefinition)});
-	transform::cleanUnreachableBlocks(cfg);
-	transform::eliminateTrivialPhis(cfg);
-	transform::removeIdentitiesAndNops(cfg);
 }
 
 void SSACFGBuilder::operator()(ExpressionStatement const& _expressionStatement)
