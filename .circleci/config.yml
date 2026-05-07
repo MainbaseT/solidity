@@ -1585,7 +1585,8 @@ jobs:
           at: /tmp/workspace
       - run:
           name: Ensure pnpm is installed if npm is present
-          command: sudo npm install -g pnpm
+          # Pin to pnpm v9 as v10 introduces additional safe guards and causes failures
+          command: sudo npm install -g pnpm@9
       - run:
           name: Retrieve EDR latest release tag
           command: |
@@ -1659,7 +1660,8 @@ jobs:
           name: Ensure pnpm is installed if npm is present
           command: |
             if command -v npm &> /dev/null; then
-              sudo npm install -g pnpm
+              # Pin to pnpm v9 as v10 introduces additional safe guards and causes failures
+              sudo npm install -g pnpm@9
             fi
       - when:
           condition: << parameters.python2 >>
