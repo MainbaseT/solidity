@@ -359,14 +359,13 @@ void CodeTransform::operator()(SSACFG::BlockId const& _currentBlock, SSACFG::Bas
 	}
 	{
 		yulAssert(m_stackLayout[_conditionalJump.nonZero]);
+		m_assembly.setStackHeight(static_cast<int>(m_stack.size()));
 		// transform stack to a state in which we can jump to the nonZero branch
 		prepareBlockExitStack(
 			m_stackLayout[_conditionalJump.nonZero]->stackIn,
 			PhiInverse(m_cfg, _currentBlock, _conditionalJump.nonZero)
 		);
 		assertLayoutCompatibility(m_stack.data(), m_stackLayout[_conditionalJump.nonZero]->stackIn);
-
-		m_assembly.setStackHeight(static_cast<int>(m_stack.size()));
 		if (!m_blockIsTransformed[_conditionalJump.nonZero.value])
 			(*this)(_conditionalJump.nonZero);
 	}
