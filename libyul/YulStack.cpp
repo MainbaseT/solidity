@@ -22,6 +22,7 @@
 #include <libyul/AsmAnalysisInfo.h>
 #include <libyul/backends/evm/ssa/SSACFGBuilder.h>
 #include <libyul/backends/evm/ssa/io/JSONExporter.h>
+#include <libyul/backends/evm/ssa/transform/OptimizationPipeline.h>
 #include <libyul/backends/evm/EthAssemblyAdapter.h>
 #include <libyul/backends/evm/EVMCodeTransform.h>
 #include <libyul/backends/evm/EVMDialect.h>
@@ -402,6 +403,7 @@ Json YulStack::cfgJson() const
 			_object.code()->root(),
 			keepLiteralAssignments
 		);
+		ssa::transform::optimize(*controlFlowGraphs);
 		std::unique_ptr<ssa::ControlFlowGraphsLiveness> liveness = std::make_unique<ssa::ControlFlowGraphsLiveness>(*controlFlowGraphs);
 		return ssa::io::json::exportControlFlow(*controlFlowGraphs, liveness.get());
 	};

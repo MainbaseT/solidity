@@ -23,6 +23,8 @@
 
 #include <libyul/backends/evm/ssa/SSACFGBuilder.h>
 
+#include <libyul/backends/evm/ssa/transform/OptimizationPipeline.h>
+
 #include <libyul/AsmAnalysis.h>
 #include <libyul/Object.h>
 #include <libyul/YulStack.h>
@@ -79,6 +81,7 @@ TestCase::TestResult ControlFlowGraphTest::run(std::ostream& _stream, std::strin
 		yulStack.parserResult()->code()->root(),
 		true
 	);
+	yul::ssa::transform::optimize(*controlFlowGraphs);
 	yul::ssa::ControlFlowGraphsLiveness liveness(*controlFlowGraphs);
 	m_obtainedResult = controlFlowGraphs->toDot(&liveness);
 
