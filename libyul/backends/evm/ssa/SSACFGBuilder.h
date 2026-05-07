@@ -45,7 +45,6 @@
 
 #include <libyul/AsmAnalysisInfo.h>
 
-#include <map>
 #include <stack>
 #include <unordered_map>
 
@@ -54,13 +53,25 @@ namespace solidity::yul::ssa
 
 class SSACFGBuilder
 {
+public:
+	struct FunctionRegistration
+	{
+		FunctionGraphID id;
+		FunctionDefinition const* definition;
+	};
+	/// Lookup table for user-defined functions encountered during build, shared across
+	/// all SSACFGBuilder instances (one per function body) so they don't copy it.
+	using FunctionRegistry = std::unordered_map<Scope::Function const*, FunctionRegistration>;
+
+private:
 	SSACFGBuilder(
 		ControlFlowGraphs& _controlFlow,
 		SSACFG& _graph,
 		AsmAnalysisInfo const& _analysisInfo,
 		ControlFlowSideEffectsCollector const& _sideEffects,
 		EVMDialect const& _dialect,
-		bool _generateDebugInfo
+		bool _generateDebugInfo,
+		FunctionRegistry& _functionRegistry
 	);
 public:
 	SSACFGBuilder(SSACFGBuilder const&) = delete;
@@ -113,9 +124,9 @@ private:
 	ControlFlowSideEffectsCollector const& m_sideEffects;
 	EVMDialect const& m_dialect;
 	bool const m_generateDebugInfo;
-	std::vector<std::tuple<Scope::Function const*, FunctionDefinition const*>> m_functionDefinitions;
-	/// Translation map from Yul-AST function scopes to their corresponding FunctionGraphIDs
-	std::map<Scope::Function const*, FunctionGraphID> m_functionScopeToID;
+	/// Shared function lookup, populated as `registerFunctionDefinition` is called.
+	/// Owned by the topmost `build()` invocation; nested builders just reference it.
+	FunctionRegistry& m_functionRegistry;
 	/// Return variable scopes of the function currently being built
 	std::vector<std::reference_wrapper<Scope::Variable const>> m_currentReturnVars;
 	SSACFG::BlockId m_currentBlock;
@@ -172,8 +183,6 @@ private:
 		langutil::DebugData::ConstPtr _debugData,
 		SSACFG::BlockId _target
 	);
-
-	FunctionDefinition const* findFunctionDefinition(Scope::Function const* _function) const;
 };
 
 }
