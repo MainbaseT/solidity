@@ -36,7 +36,6 @@
 #include <libsolutil/StringUtils.h>
 #include <libsolutil/Visitor.h>
 
-#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/drop_last.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -55,14 +54,16 @@ SSACFGBuilder::SSACFGBuilder(
 	AsmAnalysisInfo const& _analysisInfo,
 	ControlFlowSideEffectsCollector const& _sideEffects,
 	EVMDialect const& _dialect,
-	bool _generateDebugInfo
+	bool _generateDebugInfo,
+	FunctionRegistry& _functionRegistry
 ):
 	m_controlFlow(_controlFlow),
 	m_graph(_graph),
 	m_info(_analysisInfo),
 	m_sideEffects(_sideEffects),
 	m_dialect(_dialect),
-	m_generateDebugInfo(_generateDebugInfo)
+	m_generateDebugInfo(_generateDebugInfo),
+	m_functionRegistry(_functionRegistry)
 {
 }
 
@@ -81,7 +82,8 @@ std::unique_ptr<ControlFlowGraphs> SSACFGBuilder::build(
 		_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
 	));
 	SSACFG& mainGraph = *controlFlowGraphs->functionGraphs.back();
-	SSACFGBuilder builder(*controlFlowGraphs, mainGraph, _analysisInfo, sideEffects, _dialect, _generateDebugInfo);
+	FunctionRegistry functionRegistry;
+	SSACFGBuilder builder(*controlFlowGraphs, mainGraph, _analysisInfo, sideEffects, _dialect, _generateDebugInfo, functionRegistry);
 	builder.m_currentBlock = mainGraph.makeBlock(debugDataOf(_block));
 	builder.sealBlock(builder.m_currentBlock);
 	builder(_block);
@@ -102,9 +104,9 @@ void SSACFGBuilder::buildFunctionGraph(
 {
 	// The graph slot and the FunctionGraphID have already been allocated in
 	// `registerFunctionDefinition`; this call builds the body into that slot.
-	auto const graphIt = m_functionScopeToID.find(_function);
-	yulAssert(graphIt != m_functionScopeToID.end(), "Function graph must be registered before building.");
-	auto& cfg = *m_controlFlow.functionGraphs[graphIt->second];
+	auto const regIt = m_functionRegistry.find(_function);
+	yulAssert(regIt != m_functionRegistry.end(), "Function graph must be registered before building.");
+	auto& cfg = *m_controlFlow.functionGraphs[regIt->second.id];
 
 	yulAssert(m_info.scopes.at(&_functionDefinition->body), "");
 	Scope* virtualFunctionScope = m_info.scopes.at(m_info.virtualBlocks.at(_functionDefinition).get()).get();
@@ -127,10 +129,8 @@ void SSACFGBuilder::buildFunctionGraph(
 		| ranges::views::transform([](auto const& _binding) { return std::get<1>(_binding); })
 		| ranges::to<std::vector>;
 
-	SSACFGBuilder builder(m_controlFlow, cfg, m_info, m_sideEffects, m_dialect, m_generateDebugInfo);
+	SSACFGBuilder builder(m_controlFlow, cfg, m_info, m_sideEffects, m_dialect, m_generateDebugInfo, m_functionRegistry);
 	builder.m_currentBlock = cfg.entry;
-	builder.m_functionDefinitions = m_functionDefinitions;
-	builder.m_functionScopeToID = m_functionScopeToID;
 	builder.m_currentReturnVars = returnVars;
 	for (auto&& [var, varId]: argumentBindings)
 		builder.currentDef(var, cfg.entry) = varId;
@@ -374,7 +374,6 @@ void SSACFGBuilder::registerFunctionDefinition(FunctionDefinition const& _functi
 	yulAssert(m_scope, "");
 	yulAssert(m_scope->identifiers.count(_functionDefinition.name), "");
 	auto& function = std::get<Scope::Function>(m_scope->identifiers.at(_functionDefinition.name));
-	m_functionDefinitions.emplace_back(&function, &_functionDefinition);
 
 	// Allocate the graph slot up front so sibling functions (and mutually-recursive pairs) can
 	// reference this function by its FunctionGraphID when their bodies are built later.
@@ -386,7 +385,7 @@ void SSACFGBuilder::registerFunctionDefinition(FunctionDefinition const& _functi
 	auto& cfg = *m_controlFlow.functionGraphs.back();
 	cfg.name = function.name.str();
 	cfg.numReturns = _functionDefinition.returnVariables.size();
-	m_functionScopeToID[&function] = graphID;
+	m_functionRegistry[&function] = {graphID, &_functionDefinition};
 }
 
 void SSACFGBuilder::operator()(Block const& _block)
@@ -481,17 +480,15 @@ InstId SSACFGBuilder::visitFunctionCall(FunctionCall const& _call)
 		{
 			YulName const& functionName = _identifier.name;
 			Scope::Function const& function = lookupFunction(functionName);
-			auto const* definition = findFunctionDefinition(&function);
-			yulAssert(definition);
-			canContinue = m_sideEffects.functionSideEffects().at(definition).canContinue;
-			auto const calleeIt = m_functionScopeToID.find(&function);
-			yulAssert(calleeIt != m_functionScopeToID.end(), "Called function has no registered graph id.");
+			auto const calleeIt = m_functionRegistry.find(&function);
+			yulAssert(calleeIt != m_functionRegistry.end(), "Called function has no registered graph id.");
+			canContinue = m_sideEffects.functionSideEffects().at(calleeIt->second.definition).canContinue;
 			std::vector<InstId> inputs;
 			for (auto const& arg: _call.arguments | ranges::views::reverse)
 				inputs.emplace_back(std::visit(*this, arg));
 			return m_graph.makeCallWithProjections(
 				m_currentBlock,
-				SSACFG::Call{calleeIt->second, canContinue, function.numReturns},
+				SSACFG::Call{calleeIt->second.id, canContinue, function.numReturns},
 				std::move(inputs),
 				static_cast<InstructionStore::NumReturnsSizeType>(function.numReturns),
 				debugDataOf(_call)
@@ -640,13 +637,3 @@ void SSACFGBuilder::jump(
 	m_currentBlock = _target;
 }
 
-FunctionDefinition const* SSACFGBuilder::findFunctionDefinition(Scope::Function const* _function) const
-{
-	auto it = ranges::find_if(
-			m_functionDefinitions,
-			[&_function](auto const& _entry) { return std::get<0>(_entry) == _function; }
-		);
-	if (it != m_functionDefinitions.end())
-		return std::get<1>(*it);
-	return nullptr;
-}
