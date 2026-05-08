@@ -897,8 +897,7 @@ evmasm::AssemblyItems const* CompilerStack::assemblyItems(std::string const& _co
 	Contract const& currentContract = contract(_contractName);
 	if (!currentContract.evmAssembly)
 		return nullptr;
-	solAssert(currentContract.evmAssembly->codeSections().size() == 1, "Expected a single code section in legacy codegen.");
-	return &currentContract.evmAssembly->codeSections().front().items;
+	return &currentContract.evmAssembly->items();
 }
 
 evmasm::AssemblyItems const* CompilerStack::runtimeAssemblyItems(std::string const& _contractName) const
@@ -909,8 +908,7 @@ evmasm::AssemblyItems const* CompilerStack::runtimeAssemblyItems(std::string con
 
 	if (!currentContract.evmRuntimeAssembly)
 		return nullptr;
-	solAssert(currentContract.evmRuntimeAssembly->codeSections().size() == 1, "Expected a single code section in legacy codegen.");
-	return &currentContract.evmRuntimeAssembly->codeSections().front().items;
+	return &currentContract.evmRuntimeAssembly->items();
 }
 
 Json CompilerStack::generatedSources(std::string const& _contractName, bool _runtime) const

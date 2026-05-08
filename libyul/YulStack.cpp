@@ -264,13 +264,10 @@ YulStack::assembleWithDeployed(std::optional<std::string_view> _deployName, bool
 		yulAssert(creationObject.bytecode->immutableReferences.empty(), "Leftover immutables.");
 		creationObject.assembly = creationAssembly;
 		creationObject.sourceMappings = std::make_unique<std::string>();
-		for (auto const& codeSection: creationAssembly->codeSections())
-		{
-			*creationObject.sourceMappings += evmasm::AssemblyItem::computeSourceMapping(
-				codeSection.items,
-				{{m_charStream->name(), 0}}
-			);
-		}
+		*creationObject.sourceMappings = evmasm::AssemblyItem::computeSourceMapping(
+			creationAssembly->items(),
+			{{m_charStream->name(), 0}}
+		);
 		if (debugInfoSelection().ethdebug)
 			creationObject.ethdebug = evmasm::ethdebug::program(creationObject.assembly->name(), 0, *creationObject.assembly, *creationObject.bytecode);
 
@@ -280,12 +277,11 @@ YulStack::assembleWithDeployed(std::optional<std::string_view> _deployName, bool
 			deployedObject.assembly = deployedAssembly;
 			if (debugInfoSelection().ethdebug)
 				deployedObject.ethdebug = evmasm::ethdebug::program(deployedObject.assembly->name(), 0, *deployedObject.assembly, *deployedObject.bytecode);
-			solAssert(deployedAssembly->codeSections().size() == 1);
 			deployedObject.sourceMappings = std::make_unique<std::string>(
 				evmasm::AssemblyItem::computeSourceMapping(
-					deployedAssembly->codeSections().front().items,
+					deployedAssembly->items(),
 					{{m_charStream->name(), 0}}
-					)
+				)
 			);
 		}
 	}

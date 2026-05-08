@@ -57,14 +57,12 @@ void EVMAssemblyStack::assemble()
 
 	m_evmAssembly->optimise(m_optimiserSettings);
 	m_object = m_evmAssembly->assemble();
-	solAssert(m_evmAssembly->codeSections().size() == 1);
-	m_sourceMapping = AssemblyItem::computeSourceMapping(m_evmAssembly->codeSections().front().items, sourceIndices());
+	m_sourceMapping = AssemblyItem::computeSourceMapping(m_evmAssembly->items(), sourceIndices());
 	if (m_evmAssembly->numSubs() > 0)
 	{
 		m_evmRuntimeAssembly = std::make_shared<evmasm::Assembly>(m_evmAssembly->sub(SubAssemblyID{0}));
 		solAssert(m_evmRuntimeAssembly && !m_evmRuntimeAssembly->isCreation());
-		solAssert(m_evmRuntimeAssembly->codeSections().size() == 1);
-		m_runtimeSourceMapping = AssemblyItem::computeSourceMapping(m_evmRuntimeAssembly->codeSections().front().items, sourceIndices());
+		m_runtimeSourceMapping = AssemblyItem::computeSourceMapping(m_evmRuntimeAssembly->items(), sourceIndices());
 		m_runtimeObject = m_evmRuntimeAssembly->assemble();
 	}
 }
