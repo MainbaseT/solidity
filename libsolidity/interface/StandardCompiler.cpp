@@ -1908,12 +1908,18 @@ Json StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 	if (isEthdebugGlobalOutputRequested(_inputsAndSettings.outputSelection, "ethdebug.resources"))
 	{
 		solAssert(_inputsAndSettings.experimental, "");
-		output["ethdebug"]["resources"] = evmasm::ethdebug::resources({sourceName}, VersionString);
+		output["ethdebug"]["resources"] = evmasm::ethdebug::resources(
+			{{.id = 0, .path = sourceName, .contents = sourceContents, .language = "Yul"}},
+			VersionString
+		);
 	}
 	if (isEthdebugGlobalOutputRequested(_inputsAndSettings.outputSelection, "ethdebug.compilation"))
 	{
 		solAssert(_inputsAndSettings.experimental, "");
-		output["ethdebug"]["compilation"] = evmasm::ethdebug::compilation(VersionString);
+		output["ethdebug"]["compilation"] = evmasm::ethdebug::compilation(
+			{{.id = 0, .path = sourceName, .contents = sourceContents, .language = "Yul"}},
+			VersionString
+		);
 	}
 	return output;
 }

@@ -1234,12 +1234,28 @@ Json CompilerStack::interfaceSymbols(std::string const& _contractName) const
 Json CompilerStack::ethdebug() const
 {
 	solAssert(m_stackState >= AnalysisSuccessful, "Analysis was not successful.");
-	return evmasm::ethdebug::resources(sourceNames(), VersionString);
+	return evmasm::ethdebug::resources(ethdebugSources(), VersionString);
 }
 
 Json CompilerStack::ethdebugCompilation() const
 {
-	return evmasm::ethdebug::compilation(VersionString);
+	solAssert(m_stackState >= AnalysisSuccessful, "Analysis was not successful.");
+	return evmasm::ethdebug::compilation(ethdebugSources(), VersionString);
+}
+
+std::vector<evmasm::ethdebug::Source> CompilerStack::ethdebugSources() const
+{
+	auto const sourceIDs = sourceIndices();
+	std::vector<evmasm::ethdebug::Source> sources;
+	sources.reserve(m_sources.size());
+	for (auto const& [sourceName, source]: m_sources)
+		sources.push_back({
+			.id = sourceIDs.at(sourceName),
+			.path = sourceName,
+			.contents = source.charStream->source(),
+			.language = "Solidity"
+		});
+	return sources;
 }
 
 Json CompilerStack::ethdebug(std::string const& _contractName) const
