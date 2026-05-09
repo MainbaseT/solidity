@@ -8,7 +8,6 @@ contract C {
     }
 }
 // ====
-// bytecodeFormat: legacy
 // ----
 // constructor(): 1, 2, 3, 4 ->
 // gas irOptimized: 148129

@@ -13,7 +13,6 @@ contract C {
     function h() public view returns (uint) { return address(1).code.length; }
 }
 // ====
-// bytecodeFormat: legacy
 // ----
 // constructor() ->
 // gas irOptimized: 70924

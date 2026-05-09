@@ -7,7 +7,6 @@ contract Test {
     }
 }
 // ====
-// bytecodeFormat: legacy
 // ----
 // constructor(): 7, 0x40, 78, "abcdefghijklmnopqrstuvwxyzabcdef", "ghijklmnopqrstuvwxyzabcdefghijkl", "mnopqrstuvwxyz" ->
 // gas irOptimized: 181629

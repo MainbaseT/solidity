@@ -7,7 +7,6 @@ contract C {
 	}
 }
 // ====
-// bytecodeFormat: legacy
 // ----
 // constructor(): 42 ->
 // gas irOptimized: 68387

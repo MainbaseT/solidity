@@ -62,7 +62,6 @@ contract D {
 }
 // ====
 // EVMVersion: >=cancun
-// bytecodeFormat: legacy
 // ----
 // constructor(), 1 ether ->
 // gas irOptimized: 67028

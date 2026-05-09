@@ -22,7 +22,6 @@ contract C {
 }
 // ====
 // EVMVersion: >=byzantium
-// bytecodeFormat: legacy
 // revertStrings: debug
 // ----
 // constructor(), 1 ether ->

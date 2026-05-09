@@ -8,7 +8,6 @@ contract C {
     function f() external view returns(uint) { return x; }
 }
 // ====
-// bytecodeFormat: legacy
 // optimize-yul: true
 // ----
 // CodeGenerationError 1284: (0-168): Some immutables were read from but never assigned, possibly because of optimization.

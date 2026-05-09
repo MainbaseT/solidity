@@ -36,6 +36,5 @@ contract C is X {
     }
 }
 // ====
-// bytecodeFormat: legacy
 // ----
 // test() -> true
