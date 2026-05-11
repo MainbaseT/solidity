@@ -149,6 +149,7 @@ public:
 	bool isProjection(InstId const _id) const { return inst(_id).isProjection(); }
 	bool isIdentity(InstId const _id) const { return inst(_id).isIdentity(); }
 	bool isNop(InstId const _id) const { return inst(_id).isNop(); }
+	bool isMemoryGuard(InstId const _id) const { return inst(_id).isMemoryGuard(); }
 	bool isTombstone(InstId const _id) const { return inst(_id).isTombstone(); }
 	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
 
@@ -192,6 +193,15 @@ public:
 		InstId const id = scheduleInBlock(m_instructions.appendFunctionArg(entry), entry);
 		if (debugInfo)
 			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(entry));
+		return id;
+	}
+
+	/// Allocates a MemoryGuard Inst at `_block`. The boundary value lives in `ControlFlowGraphs::memoryGuard`.
+	InstId makeMemoryGuard(BlockId const _block, langutil::DebugData::ConstPtr _debugData = {})
+	{
+		InstId const id = scheduleInBlock(m_instructions.appendMemoryGuard(_block), _block);
+		if (debugInfo && _debugData)
+			debugInfo->setValueDebugData(id, std::move(_debugData));
 		return id;
 	}
 
@@ -382,6 +392,8 @@ public:
 			return callPayload(_op).numReturns;
 		case InstOpcode::BuiltinCall:
 			return evmDialect.builtin(builtinPayload(_op).builtin).numReturns;
+		case InstOpcode::MemoryGuard:
+			return 1;
 		default:
 			yulAssert(false, fmt::format("numReturnsOf called on non-operation inst {}", _op));
 		}

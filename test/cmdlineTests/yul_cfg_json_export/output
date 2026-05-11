@@ -17,9 +17,6 @@ Yul Control Flow Graph:
                 "instructions": [
                     {
                         "in": [],
-                        "literalArgs": [
-                            "0x80"
-                        ],
                         "op": "memoryguard",
                         "out": [
                             "v0"
@@ -124,6 +121,7 @@ Yul Control Flow Graph:
             }
         ],
         "functions": {},
+        "memoryGuard": "0x80",
         "subObjects": {
             "C_19_deployed": {
                 "blocks": [
@@ -140,9 +138,6 @@ Yul Control Flow Graph:
                         "instructions": [
                             {
                                 "in": [],
-                                "literalArgs": [
-                                    "0x80"
-                                ],
                                 "op": "memoryguard",
                                 "out": [
                                     "v0"
@@ -439,6 +434,7 @@ Yul Control Flow Graph:
                     }
                 ],
                 "functions": {},
+                "memoryGuard": "0x80",
                 "subObjects": {}
             },
             "type": "subObject"
@@ -465,9 +461,6 @@ Yul Control Flow Graph:
                 "instructions": [
                     {
                         "in": [],
-                        "literalArgs": [
-                            "0x80"
-                        ],
                         "op": "memoryguard",
                         "out": [
                             "v0"
@@ -572,6 +565,7 @@ Yul Control Flow Graph:
             }
         ],
         "functions": {},
+        "memoryGuard": "0x80",
         "subObjects": {
             "D_38_deployed": {
                 "blocks": [
@@ -588,9 +582,6 @@ Yul Control Flow Graph:
                         "instructions": [
                             {
                                 "in": [],
-                                "literalArgs": [
-                                    "0x80"
-                                ],
                                 "op": "memoryguard",
                                 "out": [
                                     "v0"
@@ -1675,6 +1666,7 @@ Yul Control Flow Graph:
                     }
                 ],
                 "functions": {},
+                "memoryGuard": "0x80",
                 "subObjects": {
                     "C_19": {
                         "blocks": [
@@ -1691,9 +1683,6 @@ Yul Control Flow Graph:
                                 "instructions": [
                                     {
                                         "in": [],
-                                        "literalArgs": [
-                                            "0x80"
-                                        ],
                                         "op": "memoryguard",
                                         "out": [
                                             "v0"
@@ -1798,6 +1787,7 @@ Yul Control Flow Graph:
                             }
                         ],
                         "functions": {},
+                        "memoryGuard": "0x80",
                         "subObjects": {
                             "C_19_deployed": {
                                 "blocks": [
@@ -1814,9 +1804,6 @@ Yul Control Flow Graph:
                                         "instructions": [
                                             {
                                                 "in": [],
-                                                "literalArgs": [
-                                                    "0x80"
-                                                ],
                                                 "op": "memoryguard",
                                                 "out": [
                                                     "v0"
@@ -2113,6 +2100,7 @@ Yul Control Flow Graph:
                                     }
                                 ],
                                 "functions": {},
+                                "memoryGuard": "0x80",
                                 "subObjects": {}
                             },
                             "type": "subObject"

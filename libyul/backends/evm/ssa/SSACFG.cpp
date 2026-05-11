@@ -108,13 +108,26 @@ protected:
 		});
 		m_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const& inst) {
 			std::string label;
-			if (inst.opcode == InstOpcode::Call)
+			switch (inst.opcode)
+			{
+			case InstOpcode::Call:
 			{
 				auto const graphID = m_cfg.callPayload(instId).graphID;
 				label = m_controlFlow ? m_controlFlow->functionGraph(graphID)->name : fmt::format("func{}", graphID);
+				break;
 			}
-			else
+			case InstOpcode::BuiltinCall:
 				label = m_cfg.evmDialect.builtin(m_cfg.builtinPayload(instId).builtin).name;
+				break;
+			case InstOpcode::MemoryGuard:
+				if (m_controlFlow && m_controlFlow->memoryGuard)
+					label = fmt::format("memoryguard<{}>", toCompactHexWithPrefix(*m_controlFlow->memoryGuard));
+				else
+					label = "memoryguard";
+				break;
+			default:
+				yulAssert(false);
+			}
 			if (m_cfg.numReturnsOf(instId) >= 1)
 				_out << fmt::format("{} := ", valueToString(instId));
 			_out << fmt::format(

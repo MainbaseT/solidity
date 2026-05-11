@@ -54,8 +54,9 @@ void transform::removeIdentitiesAndNops(SSACFG& _cfg)
 		case InstOpcode::Phi:
 		case InstOpcode::FunctionArg:
 		case InstOpcode::Unreachable:
+		case InstOpcode::MemoryGuard:
 			// Identity / Nop / Tombstone: rewriting their inputs is pointless as they will be tombstoned
-			// Const / Phi / FunctionArg / Unreachable: can't have identity inputs by construction
+			// Const / Phi / FunctionArg / Unreachable / MemoryGuard: can't have identity inputs by construction
 			break;
 		case InstOpcode::Upsilon:
 		{
