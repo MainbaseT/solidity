@@ -49,10 +49,8 @@ void transform::cleanUnreachableBlocks(SSACFG& _cfg)
 	}
 
 	auto& store = _cfg.instructionStore();
-	for (SSACFG::BlockId blockId{0}; blockId.value < _cfg.numBlocks(); ++blockId.value)
+	for (SSACFG::BlockId const blockId: _cfg.liveBlocks())
 	{
-		if (!_cfg.hasBlock(blockId))
-			continue;
 		if (reachable[blockId.value])
 			std::erase_if(_cfg.block(blockId).entries, [&](auto const& entry) { return !reachable[entry.value]; });
 		else

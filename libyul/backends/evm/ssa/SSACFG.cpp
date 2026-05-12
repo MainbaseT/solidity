@@ -45,17 +45,13 @@ std::string formatPhi(SSACFG const& _cfg, InstId _phiId)
 {
 	// Collect all upsilons targeting _phiId from the whole CFG.
 	std::vector<std::string> formattedUpsilons;
-	for (BlockId::ValueType bv = 0; bv < _cfg.numBlocks(); ++bv)
-	{
-		if (!_cfg.hasBlock(BlockId{bv}))
-			continue;
-		_cfg.forEachUpsilon(_cfg.block(BlockId{bv}), [&](InstId const instId, SSACFG::Inst const& inst) {
+	for (BlockId const blockId: _cfg.liveBlocks())
+		_cfg.forEachUpsilon(_cfg.block(blockId), [&](InstId const instId, SSACFG::Inst const& inst) {
 			if (_cfg.upsilonPhi(instId) == _phiId)
 				formattedUpsilons.push_back(
-					fmt::format("Block {} => {}", bv, inst.inputs.at(0).str(_cfg))
+					fmt::format("Block {} => {}", blockId.value, inst.inputs.at(0).str(_cfg))
 				);
 		});
-	}
 	if (!formattedUpsilons.empty())
 		return fmt::format("φ(\\l\\\n\t{}\\l\\\n)", fmt::join(formattedUpsilons, ",\\l\\\n\t"));
 	return "φ()";

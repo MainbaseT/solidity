@@ -36,6 +36,7 @@
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/range/traits.hpp>
+#include <range/v3/view/filter.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -165,6 +166,14 @@ public:
 		);
 		block.reset();
 		m_freeBlocks.push_back(_id);
+	}
+
+	InputRangeOf<BlockId> auto liveBlocks() const
+	{
+		return
+			ranges::views::iota(BlockId::ValueType{0}, static_cast<BlockId::ValueType>(m_blocks.size())) |
+			ranges::views::filter([this](BlockId::ValueType const _v) { return m_blocks[_v].has_value(); }) |
+			ranges::views::transform([](BlockId::ValueType const _v) { return BlockId{_v}; });
 	}
 
 	InstructionStore& instructionStore() { return m_instructions; }

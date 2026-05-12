@@ -31,17 +31,13 @@ using namespace solidity::yul::ssa;
 void transform::eliminateTrivialPhis(SSACFG& _cfg)
 {
 	// Drop upsilons whose value is Unreachable (dead control-flow predecessor)
-	for (BlockId blockId{0}; blockId.value < _cfg.numBlocks(); ++blockId.value)
-	{
-		if (!_cfg.hasBlock(blockId))
-			continue;
+	for (BlockId const blockId: _cfg.liveBlocks())
 		for (InstId const id: _cfg.block(blockId).instructions)
 		{
 			auto const& inst = _cfg.inst(id);
 			if (inst.isUpsilon() && _cfg.isUnreachable(inst.inputs[0]))
 				_cfg.replaceWithNop(id);
 		}
-	}
 
 	// Build per-phi indices
 	std::map<InstId, std::vector<InstId>> upsilonsTargeting;
