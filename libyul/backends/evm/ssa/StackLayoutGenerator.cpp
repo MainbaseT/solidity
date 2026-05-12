@@ -112,7 +112,7 @@ StackLayoutGenerator::StackLayoutGenerator(
 		// Future optimization: it might be beneficial to revisit the loop heads (back edge targets) after the first iteration
 		std::vector<std::size_t> inDegreesIgnoringBackedges(m_cfg.numBlocks(), 0);
 
-		for (SSACFG::BlockId id{0}; id.value < m_cfg.numBlocks(); ++id.value)
+		for (SSACFG::BlockId const id: m_cfg.liveBlocks())
 			for (auto const& entry: m_cfg.block(id).entries)
 				if (!m_liveness.topologicalSort().backEdge(entry, id))
 					inDegreesIgnoringBackedges[id.value] += 1;
