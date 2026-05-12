@@ -258,19 +258,14 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 
 		StackSlotLiveness const opLiveOutSlots = toStackSlotLiveness(m_cfg, opLiveOutWithoutOutputs);
 		{
-			std::size_t const targetSize = findOptimalTargetSize(
+			StackData const target = findOptimalTarget(
 				stack.data(),
 				requiredStackTop,
 				opLiveOutSlots,
 				junkCanBeAdded,
 				m_hasFunctionReturnLabel
 			);
-			auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(
-				stack,
-				requiredStackTop,
-				opLiveOutSlots,
-				targetSize
-			);
+			auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(stack, target);
 			yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 		}
 
@@ -298,16 +293,14 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				{
 					auto const condition = Slot::makeValue(m_cfg, _cJump.condition);
 					StackSlotLiveness const blockLiveOutSlots = toStackSlotLiveness(m_cfg, blockLiveOut);
-					auto const targetSize = findOptimalTargetSize(
+					StackData const target = findOptimalTarget(
 						stack.data(),
 						{condition},
 						blockLiveOutSlots,
 						false,
 						m_hasFunctionReturnLabel
 					);
-					auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(
-						stack, {condition}, blockLiveOutSlots, targetSize
-					);
+					auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(stack, target);
 					yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 				}
 
