@@ -78,6 +78,9 @@ void transform::removeIdentitiesAndNops(SSACFG& _cfg)
 
 	// Rewrite block-exit references that name InstIds outside `inst.inputs`.
 	for (BlockId blockId{0}; blockId.value < _cfg.numBlocks(); ++blockId.value)
+	{
+		if (!_cfg.hasBlock(blockId))
+			continue;
 		std::visit(solidity::util::GenericVisitor{
 			[&](SSACFG::BasicBlock::ConditionalJump& c) { c.condition = _cfg.resolveIdentity(c.condition); },
 			[&](SSACFG::BasicBlock::FunctionReturn& r) { rewriteInputs(_cfg, r.returnValues); },
@@ -85,11 +88,14 @@ void transform::removeIdentitiesAndNops(SSACFG& _cfg)
 			[](SSACFG::BasicBlock::MainExit&) {},
 			[](SSACFG::BasicBlock::Terminated&) {}
 		}, _cfg.block(blockId).exit);
+	}
 
 	// Drop Identity / Nop entries from each block and tombstone their slots. No live reference reads through any of
 	// these slots, so reusing them is safe.
 	for (BlockId blockId{0}; blockId.value < _cfg.numBlocks(); ++blockId.value)
 	{
+		if (!_cfg.hasBlock(blockId))
+			continue;
 		auto& block = _cfg.block(blockId);
 		std::vector<InstId> toTombstone;
 		std::erase_if(block.instructions, [&](InstId const _id) {

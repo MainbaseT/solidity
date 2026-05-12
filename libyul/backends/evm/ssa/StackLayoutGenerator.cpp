@@ -113,9 +113,13 @@ StackLayoutGenerator::StackLayoutGenerator(
 		std::vector<std::size_t> inDegreesIgnoringBackedges(m_cfg.numBlocks(), 0);
 
 		for (SSACFG::BlockId id{0}; id.value < m_cfg.numBlocks(); ++id.value)
+		{
+			if (!m_cfg.hasBlock(id))
+				continue;
 			for (auto const& entry: m_cfg.block(id).entries)
 				if (!m_liveness.topologicalSort().backEdge(entry, id))
 					inDegreesIgnoringBackedges[id.value] += 1;
+		}
 
 		std::queue<SSACFG::BlockId> traversalQueue;
 		traversalQueue.push(m_cfg.entry);

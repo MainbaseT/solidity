@@ -32,6 +32,7 @@
 
 #include <libsolutil/Numeric.h>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/range/traits.hpp>
@@ -40,6 +41,7 @@
 
 #include <concepts>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -118,17 +120,52 @@ public:
 
 	BlockId makeBlock(langutil::DebugData::ConstPtr _debugData)
 	{
-		// max itself is reserved for the 'empty' block
-		yulAssert(m_blocks.size() < std::numeric_limits<BlockId::ValueType>::max());
-		BlockId const blockId{static_cast<BlockId::ValueType>(m_blocks.size())};
-		m_blocks.emplace_back(BasicBlock{{}, {}, BasicBlock::Terminated{}});
+		BlockId blockId;
+		if (!m_freeBlocks.empty())
+		{
+			blockId = m_freeBlocks.back();
+			yulAssert(blockId.value < m_freeBlocks.size());
+			std::optional<BasicBlock>& block = m_blocks[blockId.value];
+			yulAssert(!block.has_value());
+			m_freeBlocks.pop_back();
+			block.emplace(BasicBlock{{}, {}, BasicBlock::Terminated{}});
+		}
+		else
+		{
+			yulAssert(m_blocks.size() < std::numeric_limits<BlockId::ValueType>::max());
+			blockId = BlockId{static_cast<BlockId::ValueType>(m_blocks.size())};
+			m_blocks.emplace_back(BasicBlock{{}, {}, BasicBlock::Terminated{}});
+		}
 		if (debugInfo)
 			debugInfo->setBlockDebugData(blockId, std::move(_debugData));
 		return blockId;
 	}
-	BasicBlock& block(BlockId _id) { return m_blocks.at(_id.value); }
-	BasicBlock const& block(BlockId _id) const { return m_blocks.at(_id.value); }
+	BasicBlock& block(BlockId _id)
+	{
+		auto& slot = m_blocks.at(_id.value);
+		yulAssert(slot.has_value(), fmt::format("Access of dead block #{}", _id.value));
+		return *slot;
+	}
+	BasicBlock const& block(BlockId _id) const
+	{
+		auto const& slot = m_blocks.at(_id.value);
+		yulAssert(slot.has_value(), fmt::format("Access of dead block #{}", _id.value));
+		return *slot;
+	}
 	size_t numBlocks() const { return m_blocks.size(); }
+	bool hasBlock(BlockId const _id) const { return _id.value < m_blocks.size() && m_blocks[_id.value].has_value(); }
+	void resetBlock(BlockId const _id)
+	{
+		yulAssert(_id.value < m_blocks.size());
+		auto& block = m_blocks[_id.value];
+		yulAssert(block.has_value(), "double reset");
+		yulAssert(
+			ranges::all_of(block->instructions, [this](InstId const _instId) { return isTombstone(_instId); }),
+			"can only reset blocks that have no live instructions left"
+		);
+		block.reset();
+		m_freeBlocks.push_back(_id);
+	}
 
 	InstructionStore& instructionStore() { return m_instructions; }
 	InstructionStore const& instructionStore() const { return m_instructions; }
@@ -328,11 +365,13 @@ public:
 private:
 	InstId scheduleInBlock(InstId const _id, BlockId const _block)
 	{
-		m_blocks.at(_block.value).instructions.push_back(_id);
+		block(_block).instructions.push_back(_id);
 		return _id;
 	}
 
-	std::vector<BasicBlock> m_blocks;
+	std::vector<std::optional<BasicBlock>> m_blocks;
+	// free list of blocks
+	std::vector<BlockId> m_freeBlocks;
 	InstructionStore m_instructions;
 public:
 	EVMDialect const& evmDialect;

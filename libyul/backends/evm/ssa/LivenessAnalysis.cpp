@@ -154,7 +154,7 @@ void LivenessAnalysis::runLoopTreeDfs(SSACFG::BlockId::ValueType const _loopHead
 		m_liveOuts[_loopHeader].maxUnion(liveLoop);
 		// for each blockId \in children(loopHeader)
 		for (SSACFG::BlockId::ValueType blockIdValue = 0u; blockIdValue < m_cfg.numBlocks(); ++blockIdValue)
-			if (m_loopNestingForest.loopParents()[blockIdValue] == _loopHeader)
+			if (m_cfg.hasBlock(SSACFG::BlockId{blockIdValue}) && m_loopNestingForest.loopParents()[blockIdValue] == _loopHeader)
 			{
 				// propagate loop liveness information down to the loop header's children
 				m_liveIns[blockIdValue].maxUnion(liveLoop);
@@ -169,6 +169,8 @@ void LivenessAnalysis::fillOperationsLiveOut()
 {
 	for (SSACFG::BlockId blockId{0}; blockId.value < m_cfg.numBlocks(); ++blockId.value)
 	{
+		if (!m_cfg.hasBlock(blockId))
+			continue;
 		auto const& block = m_cfg.block(blockId);
 		auto const opCount = static_cast<std::size_t>(ranges::count_if(
 			block.instructions,
