@@ -21,6 +21,7 @@
 #include <libyul/backends/evm/ssa/SSACFGTypes.h>
 
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 namespace solidity::yul::ssa
@@ -42,8 +43,15 @@ public:
 
 	std::vector<std::vector<FunctionGraphID>> computeSCCs() const;
 
+	/// True iff `_function` participates in a recursive chain. Either directly (self-edge) or as part of a
+	/// mutual-recursion cycle of any length
+	bool isRecursive(FunctionGraphID _function) const;
+
 private:
+	void computeRecursiveFunctions() const;
+
 	std::vector<std::vector<FunctionGraphID>> m_callees;
+	mutable std::optional<std::vector<bool>> m_recursiveFunctions;
 };
 
 }

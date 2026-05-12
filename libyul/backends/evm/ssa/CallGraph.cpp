@@ -21,6 +21,9 @@
 #include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
 #include <libyul/backends/evm/ssa/util/TarjanSCC.h>
 
+#include <libyul/Exceptions.h>
+
+#include <range/v3/algorithm/binary_search.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/algorithm/unique.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -33,14 +36,36 @@ solidity::yul::ssa::CallGraph::CallGraph(ControlFlowGraphs const& _cfgs): m_call
 			if (inst.opcode == InstOpcode::Call)
 				m_callees[index].push_back(cfgPtr->callPayload(instId).graphID);
 
-	for (auto& row: m_callees)
+	for (auto& callees: m_callees)
 	{
-		ranges::sort(row);
-		row.erase(ranges::unique(row), row.end());
+		ranges::sort(callees);
+		callees.erase(ranges::unique(callees), callees.end());
 	}
 }
 
 std::vector<std::vector<solidity::yul::ssa::FunctionGraphID>> solidity::yul::ssa::CallGraph::computeSCCs() const
 {
 	return util::computeStronglyConnectedComponents(m_callees);
+}
+
+bool solidity::yul::ssa::CallGraph::isRecursive(FunctionGraphID const _function) const
+{
+	if (!m_recursiveFunctions)
+		computeRecursiveFunctions();
+	return (*m_recursiveFunctions)[_function];
+}
+
+void solidity::yul::ssa::CallGraph::computeRecursiveFunctions() const
+{
+	std::vector result(m_callees.size(), false);
+	for (auto const& scc: computeSCCs())
+	{
+		yulAssert(!scc.empty());
+		if (scc.size() > 1)
+			for (FunctionGraphID const f: scc)
+				result[f] = true;
+		else if (ranges::binary_search(m_callees[scc.front()], scc.front()))
+			result[scc.front()] = true;
+	}
+	m_recursiveFunctions = std::move(result);
 }

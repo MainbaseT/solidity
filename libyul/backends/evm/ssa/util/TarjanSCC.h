@@ -65,6 +65,7 @@ struct TarjanSCC
 
 	void enter(NodeIndex const _v)
 	{
+		yulAssert(_v < adjacency.size());
 		discoveryIndex[_v] = nextIndex;
 		lowlink[_v] = nextIndex;
 		++nextIndex;
