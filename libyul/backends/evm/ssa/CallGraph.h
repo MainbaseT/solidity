@@ -40,6 +40,8 @@ public:
 		return m_callees[_function];
 	}
 
+	std::vector<std::vector<FunctionGraphID>> computeSCCs() const;
+
 private:
 	std::vector<std::vector<FunctionGraphID>> m_callees;
 };

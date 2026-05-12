@@ -19,6 +19,7 @@
 #include <libyul/backends/evm/ssa/CallGraph.h>
 
 #include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
+#include <libyul/backends/evm/ssa/util/TarjanSCC.h>
 
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/algorithm/unique.hpp>
@@ -37,4 +38,9 @@ solidity::yul::ssa::CallGraph::CallGraph(ControlFlowGraphs const& _cfgs): m_call
 		ranges::sort(row);
 		row.erase(ranges::unique(row), row.end());
 	}
+}
+
+std::vector<std::vector<solidity::yul::ssa::FunctionGraphID>> solidity::yul::ssa::CallGraph::computeSCCs() const
+{
+	return util::computeStronglyConnectedComponents(m_callees);
 }

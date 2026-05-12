@@ -107,6 +107,7 @@ add_library(yul
 	backends/evm/ssa/StackToMemorySpilling.h
 	backends/evm/ssa/util/UseCountSet.h
 	backends/evm/ssa/util/TLSFFreeList.h
+	backends/evm/ssa/util/TarjanSCC.h
 	backends/evm/ssa/StackUtils.cpp
 	backends/evm/ssa/StackUtils.h
 	backends/evm/ssa/io/DotExporterBase.cpp
