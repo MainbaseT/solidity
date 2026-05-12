@@ -171,6 +171,8 @@ set(libyul_sources
     libyul/YulOptimizerTest.h
     libyul/YulOptimizerTestCommon.cpp
     libyul/YulOptimizerTestCommon.h
+    libyul/ssa/CallGraphTest.cpp
+    libyul/ssa/CallGraphTest.h
     libyul/ssa/ControlFlowGraphTest.cpp
     libyul/ssa/ControlFlowGraphTest.h
     libyul/ssa/StackLayoutGeneratorTest.cpp
