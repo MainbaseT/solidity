@@ -114,6 +114,8 @@ add_library(yul
 	backends/evm/ssa/io/DotExporterBase.h
 	backends/evm/ssa/io/JSONExporter.cpp
 	backends/evm/ssa/io/JSONExporter.h
+	backends/evm/ssa/io/Printer.cpp
+	backends/evm/ssa/io/Printer.h
 	backends/evm/ssa/transform/IdentityAndNopRemover.cpp
 	backends/evm/ssa/transform/IdentityAndNopRemover.h
 	backends/evm/ssa/transform/OptimizationPipeline.cpp

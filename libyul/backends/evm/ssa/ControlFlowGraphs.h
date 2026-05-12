@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <libyul/backends/evm/ssa/io/Printer.h>
+
 #include <libyul/backends/evm/ssa/LivenessAnalysis.h>
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
@@ -68,6 +70,13 @@ struct ControlFlowGraphs
 			);
 
 		output << "}\n";
+		return output.str();
+	}
+
+	std::string print() const
+	{
+		std::ostringstream output;
+		io::print(output, *this);
 		return output.str();
 	}
 

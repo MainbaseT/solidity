@@ -175,6 +175,8 @@ set(libyul_sources
     libyul/ssa/CallGraphTest.h
     libyul/ssa/ControlFlowGraphTest.cpp
     libyul/ssa/ControlFlowGraphTest.h
+    libyul/ssa/PrinterTest.cpp
+    libyul/ssa/PrinterTest.h
     libyul/ssa/StackLayoutGeneratorTest.cpp
     libyul/ssa/StackLayoutGeneratorTest.h
     libyul/ssa/StackShufflerTest.cpp
