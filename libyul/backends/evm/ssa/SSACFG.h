@@ -182,6 +182,12 @@ public:
 	Inst& inst(InstId _id) { return m_instructions.inst(_id); }
 	Inst const& inst(InstId _id) const { return m_instructions.inst(_id); }
 	size_t numInsts() const { return m_instructions.numInsts(); }
+	InputRangeOf<InstId> auto instructionIds() const
+	{
+		return
+			ranges::views::iota(static_cast<InstId::ValueType>(0), static_cast<InstId::ValueType>(numInsts())) |
+			ranges::views::transform([](auto const _value) { return InstId{_value}; });
+	}
 	std::vector<Inst> const& instructions() const { return m_instructions.instructions(); }
 
 	/// Returns the opcode category for a given InstId.
