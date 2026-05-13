@@ -3975,32 +3975,37 @@ MemberList::MemberMap TypeType::nativeMembers(ASTNode const* _currentScope) cons
 				if (declaration->name().empty())
 					continue;
 
-				if (contract.isLibrary() && declaration->isVisibleAsLibraryMember())
+				if (!contract.isLibrary())
 				{
-					// In case the contract is library, add only visible library members. visibility >= Internal.
-					members.emplace_back(
-						declaration,
-						declaration->typeViaContractName(Declaration::ContractNameAccessKind::Library)
-					);
+					if (inDerivingScope)
+					{
+						if (declaration->isVisibleViaContractName(Declaration::ContractNameAccessKind::Local))
+						{
+							members.emplace_back(
+								declaration,
+								declaration->typeViaContractName(Declaration::ContractNameAccessKind::Local));
+						}
+					}
+					else // !inDerivingScope
+					{
+						if (declaration->isVisibleViaContractName(Declaration::ContractNameAccessKind::Foreign))
+						{
+							members.emplace_back(
+								declaration,
+								declaration->typeViaContractName(Declaration::ContractNameAccessKind::Foreign)
+							);
+						}
+					}
 				}
-				else if (!contract.isLibrary() && inDerivingScope && declaration->visibility() > Visibility::Private)
+				else // isLibrary
 				{
-					// In case of regular contract (not library) and member is in the same deriving scope, add all
-					// members which are not private. Private members cannot be accessed via contract type name
-					// i.e C.fooPrivate.
-					members.emplace_back(
-						declaration,
-						declaration->typeViaContractName(Declaration::ContractNameAccessKind::Local)
-					);
-				}
-				else if (!contract.isLibrary() && !inDerivingScope && declaration->isVisibleViaContractTypeAccess())
-				{
-					// In case of regular contract (not library) being accessed from foreign contract (not in deriving
-					// scope), add only externally visible members.
-					members.emplace_back(
-						declaration,
-						declaration->typeViaContractName(Declaration::ContractNameAccessKind::Foreign)
-					);
+					if (declaration->isVisibleViaContractName(Declaration::ContractNameAccessKind::Library))
+					{
+						members.emplace_back(
+							declaration,
+							declaration->typeViaContractName(Declaration::ContractNameAccessKind::Library)
+						);
+					}
 				}
 			}
 		}

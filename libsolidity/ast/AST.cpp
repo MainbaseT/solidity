@@ -493,11 +493,13 @@ Type const* FunctionDefinition::type() const
 
 Type const* FunctionDefinition::typeViaContractName(ContractNameAccessKind const _accessKind) const
 {
+	// TODO: Fails because private library functions are attachable but not visible (issue #16721)
+	//solAssert(isVisibleViaContractName(_accessKind));
 	switch (_accessKind)
 	{
 		case ContractNameAccessKind::Local:
 		{
-			solAssert(!libraryFunction(), "Library member cannot be accessed from local/deriving scope");
+			solAssert(!libraryFunction(), "Library members can only be accessed via library name.");
 			solAssert(visibility() > Visibility::Private, "Private non-library member is not visible via contract type name");
 
 			if (!Declaration::isVisibleInContract() || !isImplemented())
@@ -513,7 +515,7 @@ Type const* FunctionDefinition::typeViaContractName(ContractNameAccessKind const
 		case ContractNameAccessKind::Foreign:
 		{
 			solAssert(!libraryFunction(), "Library members can only be accessed via library name.");
-			solAssert(isVisibleViaContractTypeAccess(), "Externally invisible member accessed via contract name.");
+			solAssert(isVisibleViaContractTypeAccess(), "Invisible member accessed via contract name.");
 			// Foreign contract member function being accessed via contract type name, cannot be called.
 			return TypeProvider::function(*this, FunctionType::Kind::Declaration);
 		}

@@ -306,10 +306,28 @@ public:
 		Library, ///< Via library name (no distinction between local or foreign access).
 	};
 
+	bool isVisibleViaContractName(ContractNameAccessKind const _accessKind) const
+	{
+		switch (_accessKind)
+		{
+		case ContractNameAccessKind::Local:
+			return visibility() > Visibility::Private;
+		case ContractNameAccessKind::Foreign:
+			return isVisibleViaContractTypeAccess();
+		case ContractNameAccessKind::Library:
+			return isVisibleAsLibraryMember();
+		}
+
+		util::unreachable();
+	}
 	/// @returns the type for members of the containing contract type that refer to this declaration. Depends on access
 	/// context defined by `ContractNameAccessKind`.
 	/// This can only be called once types of variable declarations have already been resolved.
-	virtual Type const* typeViaContractName(ContractNameAccessKind const) const { return type(); }
+	virtual Type const* typeViaContractName(ContractNameAccessKind const _accessKind) const
+	{
+		solAssert(isVisibleViaContractName(_accessKind));
+		return type();
+	}
 
 	/// @param _internal false indicates external interface is concerned, true indicates internal interface is concerned.
 	/// @returns null when it is not accessible as a function.
