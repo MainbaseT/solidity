@@ -52,6 +52,8 @@ add_executable(isoltest
 	../libyul/YulOptimizerTest.cpp
 	../libyul/YulOptimizerTestCommon.cpp
 	../libyul/YulInterpreterTest.cpp
+	../libyul/ssa/CallGraphTest.cpp
+	../libyul/ssa/CallGraphTest.h
 	../libyul/ssa/ControlFlowGraphTest.cpp
 	../libyul/ssa/ControlFlowGraphTest.h
 	../libyul/ssa/StackLayoutGeneratorTest.cpp
