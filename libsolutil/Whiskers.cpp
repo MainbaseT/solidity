@@ -247,3 +247,4 @@ Whiskers::StringMap Whiskers::joinMaps(
 		);
 	return ret;
 }
+
