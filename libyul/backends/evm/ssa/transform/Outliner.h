@@ -16,24 +16,16 @@
 */
 // SPDX-License-Identifier: GPL-3.0
 
-#include <libyul/backends/evm/ssa/transform/OptimizationPipeline.h>
+#pragma once
 
-#include <libyul/backends/evm/ssa/transform/IdentityAndNopRemover.h>
-#include <libyul/backends/evm/ssa/transform/Outliner.h>
-#include <libyul/backends/evm/ssa/transform/TrivialPhiEliminator.h>
-#include <libyul/backends/evm/ssa/transform/UnreachableBlockCleaner.h>
-
-#include <libyul/backends/evm/ssa/ControlFlowGraphs.h>
-
-using namespace solidity::yul::ssa;
-
-void transform::optimize(ControlFlowGraphs& _cfgs)
+namespace solidity::yul::ssa
 {
-	for (auto& cfg: _cfgs.functionGraphs)
-	{
-		transform::cleanUnreachableBlocks(*cfg);
-		transform::eliminateTrivialPhis(*cfg);
-		transform::removeIdentitiesAndNops(*cfg);
-	}
-	transform::runOutliner(_cfgs);
+
+struct ControlFlowGraphs;
+
+namespace transform
+{
+void runOutliner(ControlFlowGraphs&);
 }
+
+} // namespace solidity::yul::ssa
