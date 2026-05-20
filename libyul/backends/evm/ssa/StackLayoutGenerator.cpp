@@ -85,22 +85,25 @@ void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 SSACFGStackLayout StackLayoutGenerator::generate(
 	LivenessAnalysis const& _liveness,
 	CallSites const& _callSites,
-	ControlFlowGraphs::FunctionGraphID const _graphID
+	ControlFlowGraphs::FunctionGraphID const _graphID,
+	bool const _spillingAllowed
 )
 {
-	return StackLayoutGenerator(_liveness, _callSites, _graphID).m_resultLayout;
+	return StackLayoutGenerator(_liveness, _callSites, _graphID, _spillingAllowed).m_resultLayout;
 }
 
 StackLayoutGenerator::StackLayoutGenerator(
 	LivenessAnalysis const& _liveness,
 	CallSites const& _callSites,
-	ControlFlowGraphs::FunctionGraphID const _graphID
+	ControlFlowGraphs::FunctionGraphID const _graphID,
+	bool const _spillingAllowed
 ):
 	m_cfg(_liveness.cfg()),
 	m_liveness(_liveness),
 	m_callSites(_callSites),
 	m_graphID(_graphID),
 	m_hasFunctionReturnLabel(!_liveness.cfg().isMainGraph() && _liveness.cfg().canContinue),
+	m_spillingAllowed(_spillingAllowed),
 	m_junkAdmittingBlocksFinder(std::make_unique<JunkAdmittingBlocksFinder>(_liveness.cfg(), _liveness.topologicalSort())),
 	m_inputStackProposalsPerBlock(m_cfg.numBlocks()),
 	m_resultLayout(m_cfg.numBlocks())

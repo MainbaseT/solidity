@@ -35,14 +35,16 @@ public:
 	static SSACFGStackLayout generate(
 		LivenessAnalysis const& _liveness,
 		CallSites const& _callSites,
-		ControlFlowGraphs::FunctionGraphID _graphID
+		ControlFlowGraphs::FunctionGraphID _graphID,
+		bool _spillingAllowed
 	);
 
 private:
 	explicit StackLayoutGenerator(
 		LivenessAnalysis const& _liveness,
 		CallSites const& _callSites,
-		ControlFlowGraphs::FunctionGraphID _graphID
+		ControlFlowGraphs::FunctionGraphID _graphID,
+		bool _spillingAllowed
 	);
 
 	void defineStackIn(SSACFG::BlockId const& _blockId);
@@ -53,6 +55,7 @@ private:
 	CallSites const& m_callSites;
 	ControlFlowGraphs::FunctionGraphID m_graphID;
 	bool m_hasFunctionReturnLabel;
+	bool m_spillingAllowed;
 
 	std::unique_ptr<JunkAdmittingBlocksFinder> m_junkAdmittingBlocksFinder;
 	// Per-edge stack proposals for defineStackIn.
