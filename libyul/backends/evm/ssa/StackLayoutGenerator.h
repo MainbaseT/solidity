@@ -34,7 +34,15 @@ class StackLayoutGenerator
 {
 public:
 	using Slot = StackSlot;
-	static SSACFGStackLayout generate(
+
+	/// the per-block stack layout plus the set of values the layout generator decided to spill to memory
+	struct Result
+	{
+		SSACFGStackLayout layout;
+		spill::SpillSet spillSet;
+	};
+
+	static Result generate(
 		LivenessAnalysis const& _liveness,
 		CallSites const& _callSites,
 		ControlFlowGraphs::FunctionGraphID _graphID,

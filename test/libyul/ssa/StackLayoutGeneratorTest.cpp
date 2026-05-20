@@ -171,7 +171,7 @@ frontend::test::TestCase::TestResult StackLayoutGeneratorTest::run(std::ostream&
 				gatherCallSites(cfg),
 				static_cast<ControlFlowGraphs::FunctionGraphID>(index),
 				true
-			);
+			).layout;
 			StackLayoutDotExporter exporter(cfg, index, layout, *controlFlowGraphs);
 			if (!cfg.isMainGraph())
 				m_obtainedResult += exporter.exportFunction(cfg, false);

@@ -82,14 +82,15 @@ void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 
 }
 
-SSACFGStackLayout StackLayoutGenerator::generate(
+StackLayoutGenerator::Result StackLayoutGenerator::generate(
 	LivenessAnalysis const& _liveness,
 	CallSites const& _callSites,
 	ControlFlowGraphs::FunctionGraphID const _graphID,
 	bool const _spillingAllowed
 )
 {
-	return StackLayoutGenerator(_liveness, _callSites, _graphID, _spillingAllowed).m_resultLayout;
+	StackLayoutGenerator generator(_liveness, _callSites, _graphID, _spillingAllowed);
+	return Result{std::move(generator.m_resultLayout), std::move(generator.m_spillSet)};
 }
 
 StackLayoutGenerator::StackLayoutGenerator(

@@ -65,7 +65,7 @@ void CodeTransform::run
 		yulAssert(liveness);
 		auto const graphID = static_cast<ControlFlowGraphs::FunctionGraphID>(functionIndex);
 		bool const spillingAllowed = !callGraph.isRecursive(graphID);
-		auto const& stackLayout = StackLayoutGenerator::generate(*liveness, callSites, graphID, spillingAllowed);
+		auto const stackLayoutGeneratorResult = StackLayoutGenerator::generate(*liveness, callSites, graphID, spillingAllowed);
 		CodeTransform transform(
 			_assembly,
 			_builtinContext,
@@ -73,7 +73,7 @@ void CodeTransform::run
 			functionLabels,
 			callSites,
 			cfg,
-			stackLayout,
+			stackLayoutGeneratorResult.layout,
 			graphID
 		);
 		transform(cfg.entry);
