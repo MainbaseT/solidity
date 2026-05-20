@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <libyul/backends/evm/ssa/spill/SpillSet.h>
+
 #include <libyul/backends/evm/ssa/Stack.h>
 #include <libyul/backends/evm/ssa/StackLayout.h>
 
@@ -63,6 +65,7 @@ private:
 	// representing the stack state flowing from each predecessor into the block.
 	std::vector<std::vector<std::pair<SSACFG::BlockId, StackData>>> m_inputStackProposalsPerBlock;
 	SSACFGStackLayout m_resultLayout;
+	spill::SpillSet m_spillSet;
 };
 
 }

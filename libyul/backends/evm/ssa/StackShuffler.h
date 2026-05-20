@@ -951,4 +951,49 @@ private:
 	}
 };
 
+[[nodiscard]] inline StackShufflerResult shuffleWithSpillDiscovery(
+	StackData& _data,
+	StackData const& _args,
+	StackSlotLiveness const& _liveOut,
+	std::size_t const _targetStackSize,
+	spill::SpillSet& _spilledVariables
+)
+{
+	StackData const initialData = _data;
+	StackShufflerResult result;
+	do
+	{
+		_data = initialData;
+		Stack<> stack(_data, {});
+		result = StackShuffler<NoOpStackManipulationCallbacks>::shuffle(stack, _args, _liveOut, _targetStackSize, &_spilledVariables);
+		switch (result.status)
+		{
+		case StackShufflerResult::Status::Continue:
+			yulAssert(false);
+		case StackShufflerResult::Status::Admissible:
+			break;
+		case StackShufflerResult::Status::StackTooDeep:
+		{
+			yulAssert(result.culprit.isValue() && !result.culprit.isLiteralValue());
+			yulAssert(!_spilledVariables.isSpilled(result.culprit.value()));
+			_spilledVariables.add(result.culprit.value());
+			break;
+		}
+		case StackShufflerResult::Status::MaxIterationsReached:
+			break;
+		}
+	}
+	while (result.status == StackShufflerResult::Status::StackTooDeep);
+	return result;
+}
+
+[[nodiscard]] inline StackShufflerResult shuffleWithSpillDiscovery(
+	StackData& _data,
+	StackData const& _target,
+	spill::SpillSet& _spilledVariables)
+{
+	return shuffleWithSpillDiscovery(_data, _target, {}, _target.size(), _spilledVariables);
+}
+
+
 }
