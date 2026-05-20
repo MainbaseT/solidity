@@ -1718,6 +1718,37 @@ jobs:
           command: |
             pytest test/ethdebugSchemaTests --solc-binary-path=/tmp/workspace/solc/solc-static-linux -v
 
+  t_ethdebug_overhead:
+    <<: *base_ubuntu2404_large
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /tmp/workspace
+      - install_python3
+      - run:
+          name: ETHDebug compilation overhead
+          no_output_timeout: 30m
+          command: |
+            git clone --depth 1 --branch feature/ethdebug-overhead https://github.com/walnuthq/solc-bench.git /tmp/solc-bench
+            python3 -m pip install --user --break-system-packages /tmp/solc-bench
+            export PATH="$HOME/.local/bin:$PATH"
+
+            mkdir -p reports/ethdebug-overhead
+            solc-bench run \
+              --solc /tmp/workspace/solc/solc-static-linux \
+              --benchmark-dir /tmp/solc-bench/benchmark_data \
+              --tags med \
+              --iterations 3 \
+              --ethdebug-overhead \
+              --output-dir reports/ethdebug-overhead
+
+            solc-bench compare \
+              reports/ethdebug-overhead/bench-results.json \
+              --pipelines ir-ethdebug:ir \
+              --max-regression cpu_time:50
+      - store_artifacts:
+          path: reports/ethdebug-overhead/
+
   c_ext_benchmarks:
     <<: *base_node_small
     steps:
@@ -2158,6 +2189,9 @@ workflows:
 
       - t_ethdebug_output_validity:
           name: ETHDebug
+          <<: *requires_b_ubu_static
+      - t_ethdebug_overhead:
+          name: ETHDebug overhead
           <<: *requires_b_ubu_static
 
       - c_ext_benchmarks:
