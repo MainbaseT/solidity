@@ -108,7 +108,7 @@ StackData solidity::yul::ssa::findOptimalTarget
 	auto const evaluateCost = [&](std::size_t const _targetSize) -> std::size_t
 	{
 		StackShufflerResult result;
-		SpilledVariables spillSet;
+		spill::SpillSet spillSet;
 		OpsCountingCallbacks callbacks;
 		do
 		{
@@ -126,7 +126,7 @@ StackData solidity::yul::ssa::findOptimalTarget
 			{
 				yulAssert(result.culprit.isValue() && !result.culprit.isLiteralValue());
 				yulAssert(!spillSet.isSpilled(result.culprit.value()));
-				spillSet.spill(result.culprit.value());
+				spillSet.add(result.culprit.value());
 				break;
 			}
 			case StackShufflerResult::Status::MaxIterationsReached:
