@@ -32,6 +32,7 @@
 #include <libsolutil/StringUtils.h>
 #include <libsolutil/Visitor.h>
 
+#include <range/v3/algorithm/reverse.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/drop_last.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -235,7 +236,7 @@ void SSACFGBuilder::operator()(Switch const& _switch)
 		return m_graph.makeBuiltinCallWithProjections(
 			m_currentBlock,
 			SSACFG::BuiltinCall{*equalityBuiltinHandle, {}},
-			{m_graph.newLiteral(debugDataOf(_case), _case.value->value.value()), expression},
+			{expression, m_graph.newLiteral(debugDataOf(_case), _case.value->value.value())},
 			static_cast<InstructionStore::NumReturnsSizeType>(equalityBuiltin.numReturns),
 			debugDataOf(_case)
 		);
@@ -477,10 +478,13 @@ InstId SSACFGBuilder::visitFunctionCall(FunctionCall const& _call)
 					yulAssert(std::holds_alternative<Literal>(arg));
 					literalArguments.emplace_back(std::get<Literal>(arg));
 				}
+			// Arguments must be evaluated from right to left, according to Yul specification
 			std::vector<InstId> inputs;
 			for (auto&& [idx, arg]: _call.arguments | ranges::views::enumerate | ranges::views::reverse)
 				if (!builtin.literalArgument(idx).has_value())
 					inputs.emplace_back(std::visit(*this, arg));
+			// But we want to store them in the original order
+			ranges::reverse(inputs);
 			canContinue = builtin.controlFlowSideEffects.canContinue;
 			return m_graph.makeBuiltinCallWithProjections(
 				m_currentBlock,
@@ -497,9 +501,12 @@ InstId SSACFGBuilder::visitFunctionCall(FunctionCall const& _call)
 			auto const calleeIt = m_functionRegistry.find(&function);
 			yulAssert(calleeIt != m_functionRegistry.end(), "Called function has no registered graph id.");
 			canContinue = m_sideEffects.functionSideEffects().at(calleeIt->second.definition).canContinue;
+			// Arguments must be evaluated from right to left, according to Yul specification
 			std::vector<InstId> inputs;
 			for (auto const& arg: _call.arguments | ranges::views::reverse)
 				inputs.emplace_back(std::visit(*this, arg));
+			// But we want to store them in the original order
+			ranges::reverse(inputs);
 			return m_graph.makeCallWithProjections(
 				m_currentBlock,
 				SSACFG::Call{calleeIt->second.id, canContinue, function.numReturns},

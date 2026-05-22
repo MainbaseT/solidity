@@ -48,7 +48,7 @@
 // LiveOut: \l\nUsed: \l\nv1 := calldataload(0x03)\l\
 // v4 := calldataload(0x58)\l\
 // v7 := calldataload(0x63)\l\
-// sstore(0x00, v7)\l\
+// sstore(v7, 0x00)\l\
 // "];
 // Block0_0Exit [label="MainExit"];
 // Block0_0 -> Block0_0Exit;

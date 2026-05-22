@@ -53,7 +53,7 @@
 // Entry -> Block0_0;
 // Block0_0 [fillcolor="#FF746C", style=filled, label="\
 // Block 0; (0, max 0)\nLiveIn: \l\
-// LiveOut: \l\nUsed: \l\nv2 := f(0x02, 0x01)\l\
+// LiveOut: \l\nUsed: \l\nv2 := f(0x01, 0x02)\l\
 // pop(v2)\l\
 // "];
 // Block0_0Exit [label="MainExit"];
@@ -73,7 +73,7 @@
 // 	Block 0 => 0x2a,\l\
 // 	Block 21 => v63\l\
 // )\l\
-// v6 := lt(v0, phi5)\l\
+// v6 := lt(phi5, v0)\l\
 // "];
 // Block1_1 -> Block1_1Exit;
 // Block1_1Exit [label="{ If v6 | { <0> Zero | <1> NonZero }}" shape=Mrecord];
@@ -82,7 +82,7 @@
 // Block1_2 [label="\
 // Block 2; (2, max 17)\nLiveIn: phi5[2], v1[1], v0[1]\l\
 // LiveOut: phi5[1], v1[1], v7[3], v0[1]\l\nUsed: phi5[1]\l\nv7 := mload(phi5)\l\
-// v8 := eq(0x00, v7)\l\
+// v8 := eq(v7, 0x00)\l\
 // "];
 // Block1_2 -> Block1_2Exit;
 // Block1_2Exit [label="{ If v8 | { <0> Zero | <1> NonZero }}" shape=Mrecord];
@@ -90,20 +90,20 @@
 // Block1_2Exit:1 -> Block1_6 [style="solid"];
 // Block1_4 [label="\
 // Block 4; (4, max 4)\nLiveIn: \l\
-// LiveOut: \l\nUsed: \l\nsstore(0x0c0c, 0x0c)\l\
+// LiveOut: \l\nUsed: \l\nsstore(0x0c, 0x0c0c)\l\
 // "];
 // Block1_4Exit [label="FunctionReturn[0x00]"];
 // Block1_4 -> Block1_4Exit;
 // Block1_6 [label="\
 // Block 6; (3, max 4)\nLiveIn: \l\
-// LiveOut: \l\nUsed: \l\nsstore(0x0202, 0x02)\l\
+// LiveOut: \l\nUsed: \l\nsstore(0x02, 0x0202)\l\
 // "];
 // Block1_6 -> Block1_6Exit [arrowhead=none];
 // Block1_6Exit [label="Jump" shape=oval];
 // Block1_6Exit -> Block1_4 [style="solid"];
 // Block1_7 [label="\
 // Block 7; (5, max 17)\nLiveIn: phi5[1], v1[1], v7[3], v0[1]\l\
-// LiveOut: phi5[1], v1[1], v7[2], v0[1]\l\nUsed: v7[1]\l\nv16 := eq(0x01, v7)\l\
+// LiveOut: phi5[1], v1[1], v7[2], v0[1]\l\nUsed: v7[1]\l\nv16 := eq(v7, 0x01)\l\
 // "];
 // Block1_7 -> Block1_7Exit;
 // Block1_7Exit [label="{ If v16 | { <0> Zero | <1> NonZero }}" shape=Mrecord];
@@ -111,13 +111,13 @@
 // Block1_7Exit:1 -> Block1_9 [style="solid"];
 // Block1_9 [label="\
 // Block 9; (6, max 6)\nLiveIn: \l\
-// LiveOut: \l\nUsed: \l\nsstore(0x0404, 0x04)\l\
+// LiveOut: \l\nUsed: \l\nsstore(0x04, 0x0404)\l\
 // "];
 // Block1_9Exit [label="FunctionReturn[0x00]"];
 // Block1_9 -> Block1_9Exit;
 // Block1_10 [label="\
 // Block 10; (7, max 17)\nLiveIn: phi5[1], v1[1], v7[2], v0[1]\l\
-// LiveOut: phi5[1], v1[1], v7[1], v0[1]\l\nUsed: v7[1]\l\nv24 := eq(0x02, v7)\l\
+// LiveOut: phi5[1], v1[1], v7[1], v0[1]\l\nUsed: v7[1]\l\nv24 := eq(v7, 0x02)\l\
 // "];
 // Block1_10 -> Block1_10Exit;
 // Block1_10Exit [label="{ If v24 | { <0> Zero | <1> NonZero }}" shape=Mrecord];
@@ -125,14 +125,14 @@
 // Block1_10Exit:1 -> Block1_12 [style="solid"];
 // Block1_12 [fillcolor="#FF746C", style=filled, label="\
 // Block 12; (8, max 8)\nLiveIn: \l\
-// LiveOut: \l\nUsed: \l\nsstore(0x0606, 0x06)\l\
+// LiveOut: \l\nUsed: \l\nsstore(0x06, 0x0606)\l\
 // revert(0x00, 0x00)\l\
 // "];
 // Block1_12Exit [label="Terminated"];
 // Block1_12 -> Block1_12Exit;
 // Block1_13 [label="\
 // Block 13; (9, max 17)\nLiveIn: phi5[1], v1[1], v7[1], v0[1]\l\
-// LiveOut: phi5[1], v1[1], v0[1]\l\nUsed: v7[1]\l\nv33 := eq(0x03, v7)\l\
+// LiveOut: phi5[1], v1[1], v0[1]\l\nUsed: v7[1]\l\nv33 := eq(v7, 0x03)\l\
 // "];
 // Block1_13 -> Block1_13Exit;
 // Block1_13Exit [label="{ If v33 | { <0> Zero | <1> NonZero }}" shape=Mrecord];
@@ -140,7 +140,7 @@
 // Block1_13Exit:1 -> Block1_15 [style="solid"];
 // Block1_15 [label="\
 // Block 15; (10, max 14)\nLiveIn: phi5[1], v1[1], v0[1]\l\
-// LiveOut: phi5[1], v1[1], v0[1]\l\nUsed: \l\nsstore(0x0808, 0x08)\l\
+// LiveOut: phi5[1], v1[1], v0[1]\l\nUsed: \l\nsstore(0x08, 0x0808)\l\
 // "];
 // Block1_15 -> Block1_15Exit [arrowhead=none];
 // Block1_15Exit [label="Jump" shape=oval];
@@ -155,7 +155,7 @@
 // Block1_16Exit:1 -> Block1_17 [style="solid"];
 // Block1_5 [label="\
 // Block 5; (11, max 14)\nLiveIn: phi5[1], v1[1], v0[1]\l\
-// LiveOut: phi5[1], v1[1], v0[1]\l\nUsed: \l\nsstore(0x0b0b, 0x0b)\l\
+// LiveOut: phi5[1], v1[1], v0[1]\l\nUsed: \l\nsstore(0x0b, 0x0b0b)\l\
 // "];
 // Block1_5 -> Block1_5Exit [arrowhead=none];
 // Block1_5Exit [label="Jump" shape=oval];
@@ -168,14 +168,14 @@
 // Block1_17 -> Block1_17Exit;
 // Block1_18 [label="\
 // Block 18; (17, max 17)\nLiveIn: phi5[1], v1[1], v0[1]\l\
-// LiveOut: phi5[1], v1[1], v0[1]\l\nUsed: \l\nsstore(0x0a0a, 0x0a)\l\
+// LiveOut: phi5[1], v1[1], v0[1]\l\nUsed: \l\nsstore(0x0a, 0x0a0a)\l\
 // "];
 // Block1_18 -> Block1_18Exit [arrowhead=none];
 // Block1_18Exit [label="Jump" shape=oval];
 // Block1_18Exit -> Block1_5 [style="solid"];
 // Block1_3 [label="\
 // Block 3; (12, max 14)\nLiveIn: phi5[1], v1[1], v0[1]\l\
-// LiveOut: v63[1], v1[1], v0[1]\l\nUsed: phi5[1]\l\nv63 := add(0x01, phi5)\l\
+// LiveOut: v63[1], v1[1], v0[1]\l\nUsed: phi5[1]\l\nv63 := add(phi5, 0x01)\l\
 // v64 := calldataload(v63)\l\
 // "];
 // Block1_3 -> Block1_3Exit;
@@ -184,13 +184,13 @@
 // Block1_3Exit:1 -> Block1_20 [style="solid"];
 // Block1_20 [label="\
 // Block 20; (13, max 13)\nLiveIn: v63[1]\l\
-// LiveOut: \l\nUsed: v63[1]\l\nsstore(v63, 0x00)\l\
+// LiveOut: \l\nUsed: v63[1]\l\nsstore(0x00, v63)\l\
 // "];
 // Block1_20Exit [label="FunctionReturn[0x00]"];
 // Block1_20 -> Block1_20Exit;
 // Block1_21 [label="\
 // Block 21; (14, max 14)\nLiveIn: v63[1], v1[1], v0[1]\l\
-// LiveOut: v63[1], v1[1], v0[1]\l\nUsed: \l\nsstore(0xffff, 0xff)\l\
+// LiveOut: v63[1], v1[1], v0[1]\l\nUsed: \l\nsstore(0xff, 0xffff)\l\
 // "];
 // Block1_21 -> Block1_21Exit [arrowhead=none];
 // Block1_21Exit [label="Jump" shape=oval];

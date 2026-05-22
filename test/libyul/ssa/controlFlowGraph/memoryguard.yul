@@ -15,9 +15,9 @@
 // Block0_0 [fillcolor="#FF746C", style=filled, label="\
 // Block 0; (0, max 0)\nLiveIn: \l\
 // LiveOut: \l\nUsed: \l\nv0 := memoryguard<0x80>()\l\
-// mstore(0x2a, v0)\l\
+// mstore(v0, 0x2a)\l\
 // v3 := memoryguard<0x80>()\l\
-// sstore(0x01, v3)\l\
+// sstore(v3, 0x01)\l\
 // "];
 // Block0_0Exit [label="MainExit"];
 // Block0_0 -> Block0_0Exit;

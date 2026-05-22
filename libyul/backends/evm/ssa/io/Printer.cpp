@@ -30,7 +30,6 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
-#include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
@@ -74,7 +73,7 @@ void printBuiltinOperands(
 	_out << ' ';
 
 	auto litIt = payload.literalArguments.begin();
-	auto valIt = _inst.inputs.rbegin();
+	auto valIt = _inst.inputs.begin();
 	for (std::size_t i = 0; i < builtin.numParameters; ++i)
 	{
 		if (i > 0)
@@ -86,7 +85,7 @@ void printBuiltinOperands(
 		}
 		else
 		{
-			yulAssert(valIt != _inst.inputs.rend());
+			yulAssert(valIt != _inst.inputs.end());
 			_out << formatValueRef(*valIt++);
 		}
 	}
@@ -111,12 +110,12 @@ void printCallOperands(
 
 	_out << ' ';
 	bool first = true;
-	for (auto it = _inst.inputs.rbegin(); it != _inst.inputs.rend(); ++it)
+	for (auto const input: _inst.inputs)
 	{
 		if (!first)
 			_out << ", ";
 		first = false;
-		_out << formatValueRef(*it);
+		_out << formatValueRef(input);
 	}
 }
 

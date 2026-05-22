@@ -37,7 +37,7 @@
 // 	Block 1 => v5\l\
 // )\l\
 // v9 := calldataload(phi6)\l\
-// sstore(0x00, v9)\l\
+// sstore(v9, 0x00)\l\
 // "];
 // Block0_2Exit [label="MainExit"];
 // Block0_2 -> Block0_2Exit;
