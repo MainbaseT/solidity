@@ -292,6 +292,22 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 	});
 	yulAssert(operationIndex == operationsLiveOut.size());
 
+	// we don't explicitly visit backedges and might have to spill here, too
+	auto const validateBackEdge = [&](SSACFG::BlockId const& _target) {
+		if (!m_liveness.topologicalSort().backEdge(_blockId, _target))
+			return;
+		yulAssert(m_resultLayout[_target], "Back-edge target must have its stackIn defined already.");
+		StackData const target = stackPreImage(m_cfg, m_resultLayout[_target]->stackIn, PhiInverse(m_cfg, _blockId, _target));
+		auto const spillCountBefore = m_spillSet.numSpilled();
+		StackData exitStack = currentStackData;
+		auto const shuffleResult = shuffleWithSpillDiscovery(exitStack, target, m_spillSet);
+		yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
+		yulAssert(
+			m_spillingAllowed || m_spillSet.numSpilled() == spillCountBefore,
+			"Stack too deep, but spilling is disabled because the function is part of a recursive call chain."
+		);
+	};
+
 	std::visit(
 		solidity::util::GenericVisitor{
 			[&](SSACFG::BasicBlock::ConditionalJump const& _cJump) {
@@ -334,6 +350,9 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				// Define successor stack-in layouts
 				m_inputStackProposalsPerBlock[_cJump.zero.value].emplace_back(_blockId, currentStackData);
 				m_inputStackProposalsPerBlock[_cJump.nonZero.value].emplace_back(_blockId, currentStackData);
+
+				validateBackEdge(_cJump.zero);
+				validateBackEdge(_cJump.nonZero);
 			},
 			[&](SSACFG::BasicBlock::FunctionReturn const& _functionReturn) {
 				yulAssert(m_hasFunctionReturnLabel, "When there is a proper function return, we need to have a label for it");
@@ -349,6 +368,8 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 			[&](SSACFG::BasicBlock::Jump const& _jump) {
 				blockLayout.exitIn = currentStackData;
 				m_inputStackProposalsPerBlock[_jump.target.value].emplace_back(_blockId, currentStackData);
+
+				validateBackEdge(_jump.target);
 			},
 			[&](SSACFG::BasicBlock::MainExit const&) {
 				blockLayout.exitIn = currentStackData;
