@@ -1730,11 +1730,7 @@ LinkerObject const& Assembly::assembleEOF() const
 		if (ret.bytecode.size() - sectionStart > std::numeric_limits<uint16_t>::max())
 			// TODO: Include source location. Note that origin locations we have in debug data are
 			// not usable for error reporting when compiling pure Yul because they point at the optimized source.
-			throw Error(
-				2202_error,
-				Error::Type::CodeGenerationError,
-				"Code section too large for EOF."
-			);
+			solAssert(false, "Code section too large for EOF.");
 		setBigEndianUint16(ret.bytecode, codeSectionSizePositions[codeSectionIndex], ret.bytecode.size() - sectionStart);
 
 		ret.codeSectionLocations.push_back(LinkerObject::CodeSectionLocation{
@@ -1789,9 +1785,8 @@ LinkerObject const& Assembly::assembleEOF() const
 	auto const preDeployAndStaticAuxDataSize = preDeployDataSectionSize + staticAuxDataSize;
 
 	if (preDeployAndStaticAuxDataSize > std::numeric_limits<uint16_t>::max())
-		throw Error(
-			3965_error,
-			Error::Type::CodeGenerationError,
+		solAssert(
+			false,
 			"The highest accessed data offset exceeds the maximum possible size of the static auxdata section."
 		);
 

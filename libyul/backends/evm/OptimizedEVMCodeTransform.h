@@ -69,7 +69,6 @@ private:
 		UseNamedLabels _useNamedLabelsForFunctions,
 		CFG const& _dfg,
 		StackLayout const& _stackLayout,
-		bool _simulateFunctionsWithJumps,
 		EVMDialect const& _dialect
 	);
 
@@ -110,15 +109,13 @@ private:
 	Stack m_stack;
 	std::map<yul::FunctionCall const*, AbstractAssembly::LabelID> m_returnLabels;
 	std::map<CFG::BasicBlock const*, AbstractAssembly::LabelID> m_blockLabels;
-	/// Non-empty only if m_dfg.simulateFunctionsWithJumps == true
+	// Maps each function to its entry label.
 	std::map<CFG::FunctionInfo const*, AbstractAssembly::LabelID> const m_functionLabels;
 	/// Set of blocks already generated. If any of the contained blocks is ever jumped to, m_blockLabels should
 	/// contain a jump label for it.
 	std::set<CFG::BasicBlock const*> m_generated;
 	CFG::FunctionInfo const* m_currentFunctionInfo = nullptr;
 	std::vector<StackTooDeepError> m_stackErrors;
-	/// True if it simulates functions with jumps. False otherwise. True for legacy bytecode
-	bool m_simulateFunctionsWithJumps = true;
 	size_t const m_reachableStackDepth{};
 };
 
