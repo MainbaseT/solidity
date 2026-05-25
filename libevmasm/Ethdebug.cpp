@@ -22,6 +22,8 @@
 
 #include <libsolutil/Keccak256.h>
 
+#include <fmt/format.h>
+
 #include <range/v3/algorithm/any_of.hpp>
 
 using namespace solidity;
@@ -129,11 +131,9 @@ std::vector<schema::program::Instruction> programInstructions(Assembly const& _a
 	return instructionInfo;
 }
 
-void appendLengthPrefixed(std::string& _target, std::string_view _value)
+std::string lengthPrefixed(std::string_view _value)
 {
-	_target += std::to_string(_value.size());
-	_target += ":";
-	_target += _value;
+	return fmt::format("{}:{}", _value.size(), _value);
 }
 
 std::string compilationID(std::vector<Source> const& _sources)
@@ -142,28 +142,28 @@ std::string compilationID(std::vector<Source> const& _sources)
 	// TODO: take compilation flags into account. Once compiler settings are threaded
 	// into ETHDebug resources, include a normalized settings object here.
 	std::string rawIDInput = "ethdebug-solc-compilation-v1";
-	appendLengthPrefixed(rawIDInput, std::to_string(_sources.size()));
+	rawIDInput += lengthPrefixed(std::to_string(_sources.size()));
 
 	for (auto const& source: _sources)
 	{
-		appendLengthPrefixed(rawIDInput, std::to_string(source.id));
-		appendLengthPrefixed(rawIDInput, source.path);
-		appendLengthPrefixed(rawIDInput, source.contents);
-		appendLengthPrefixed(rawIDInput, source.language);
+		rawIDInput += lengthPrefixed(std::to_string(source.id));
+		rawIDInput += lengthPrefixed(source.path);
+		rawIDInput += lengthPrefixed(source.contents);
+		rawIDInput += lengthPrefixed(source.language);
 	}
 
-	return "solc-" + util::keccak256(rawIDInput).hex();
+	return fmt::format("solc-{}", util::keccak256(rawIDInput).hex());
 }
 
 schema::materials::Source materialSource(Source const& _source)
 {
-	schema::materials::Source result;
-	result.id = schema::materials::ID{_source.id};
-	result.path = _source.path;
-	result.contents = _source.contents;
-	result.encoding = std::nullopt;
-	result.language = _source.language;
-	return result;
+	return {
+		.id = schema::materials::ID{_source.id},
+		.path = _source.path,
+		.contents = _source.contents,
+		.encoding = std::nullopt,
+		.language = _source.language,
+	};
 }
 
 schema::materials::Compilation materialCompilation(std::vector<Source> const& _sources, std::string_view _version)
@@ -173,13 +173,15 @@ schema::materials::Compilation materialCompilation(std::vector<Source> const& _s
 	for (auto const& source: _sources)
 		sources.emplace_back(materialSource(source));
 
-	schema::materials::Compilation result;
-	result.id = schema::materials::ID{compilationID(_sources)};
-	result.compiler.name = "solc";
-	result.compiler.version = std::string{_version};
-	result.settings = std::nullopt;
-	result.sources = std::move(sources);
-	return result;
+	return {
+		.id = schema::materials::ID{compilationID(_sources)},
+		.compiler = {
+			.name = "solc",
+			.version = std::string{_version},
+		},
+		.settings = std::nullopt,
+		.sources = std::move(sources),
+	};
 }
 
 } // anonymous namespace
