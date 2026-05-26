@@ -157,13 +157,13 @@ std::string compilationID(std::vector<Source> const& _sources)
 
 schema::materials::Source materialSource(Source const& _source)
 {
-	return {
-		.id = schema::materials::ID{_source.id},
-		.path = _source.path,
-		.contents = _source.contents,
-		.encoding = std::nullopt,
-		.language = _source.language,
-	};
+	schema::materials::Source result;
+	result.id = schema::materials::ID{_source.id};
+	result.path = _source.path;
+	result.contents = _source.contents;
+	result.encoding = std::nullopt;
+	result.language = _source.language;
+	return result;
 }
 
 schema::materials::Compilation materialCompilation(std::vector<Source> const& _sources, std::string_view _version)
@@ -173,15 +173,13 @@ schema::materials::Compilation materialCompilation(std::vector<Source> const& _s
 	for (auto const& source: _sources)
 		sources.emplace_back(materialSource(source));
 
-	return {
-		.id = schema::materials::ID{compilationID(_sources)},
-		.compiler = {
-			.name = "solc",
-			.version = std::string{_version},
-		},
-		.settings = std::nullopt,
-		.sources = std::move(sources),
-	};
+	schema::materials::Compilation result;
+	result.id = schema::materials::ID{compilationID(_sources)};
+	result.compiler.name = "solc";
+	result.compiler.version = std::string{_version};
+	result.settings = std::nullopt;
+	result.sources = std::move(sources);
+	return result;
 }
 
 } // anonymous namespace
