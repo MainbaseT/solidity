@@ -69,6 +69,11 @@ namespace solidity::evmasm
 class Assembly;
 class AssemblyItem;
 using AssemblyItems = std::vector<AssemblyItem>;
+
+namespace ethdebug
+{
+struct Source;
+}
 }
 
 namespace solidity::yul
@@ -460,6 +465,8 @@ private:
 		util::h256 const& swarmHash() const;
 		std::string const& ipfsUrl() const;
 	};
+
+	std::vector<evmasm::ethdebug::Source> ethdebugSources() const;
 
 	/// The state per contract. Filled gradually during compilation.
 	struct Contract
