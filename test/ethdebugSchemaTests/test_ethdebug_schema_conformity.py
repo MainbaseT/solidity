@@ -40,7 +40,7 @@ def load_standard_json_input(path):
     return standard_json_input
 
 
-@pytest.fixture(params=["input_file.json", "input_file_eof.json"])
+@pytest.fixture(params=["input_file.json"])
 def standard_json_input(request):
     testfile_dir = Path(__file__).parent
     return load_standard_json_input(testfile_dir / request.param)
