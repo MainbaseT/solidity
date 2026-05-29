@@ -1186,7 +1186,7 @@ LinkerObject const& Assembly::assembleLegacy() const
 
 	codeSectionLocation.end = ret.bytecode.size();
 
-	ret.codeSectionLocations.emplace_back(std::move(codeSectionLocation));
+	ret.codeSectionLocation = std::move(codeSectionLocation);
 
 	if (!immutableReferencesBySub.empty())
 		throw

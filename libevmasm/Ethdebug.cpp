@@ -87,8 +87,7 @@ std::optional<schema::program::Context> instructionContext(AssemblyItems const& 
 
 std::vector<schema::program::Instruction> programInstructions(Assembly const& _assembly, LinkerObject const& _linkerObject, unsigned const _sourceID)
 {
-	solAssert(_linkerObject.codeSectionLocations.size() == 1);
-	auto const& locations = _linkerObject.codeSectionLocations[0];
+	auto const& locations = _linkerObject.codeSectionLocation;
 	AssemblyItems const& items = _assembly.items();
 
 	std::vector<schema::program::Instruction> instructions;
@@ -118,7 +117,6 @@ std::vector<schema::program::Instruction> programInstructions(Assembly const& _a
 
 	return instructions;
 }
-
 
 std::string lengthPrefixed(std::string_view _value)
 {
