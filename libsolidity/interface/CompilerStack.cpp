@@ -848,7 +848,6 @@ YulStack CompilerStack::loadGeneratedIR(std::string const& _ir) const
 {
 	YulStack stack(
 		m_evmVersion,
-		std::nullopt,
 		m_optimiserSettings,
 		m_debugInfoSelection,
 		this, // _soliditySourceProvider
@@ -937,7 +936,7 @@ Json CompilerStack::generatedSources(std::string const& _contractName, bool _run
 			ErrorList errors;
 			ErrorReporter errorReporter(errors);
 			CharStream charStream(source, sourceName);
-			yul::EVMDialect const& dialect = yul::EVMDialect::strictAssemblyForEVM(m_evmVersion, std::nullopt);
+			yul::EVMDialect const& dialect = yul::EVMDialect::strictAssemblyForEVM(m_evmVersion);
 			std::shared_ptr<yul::AST> parserResult = yul::Parser{errorReporter, dialect}.parse(charStream);
 			solAssert(parserResult);
 			sources[0]["ast"] = yul::AsmJsonConverter{dialect, sourceIndex}(parserResult->root());

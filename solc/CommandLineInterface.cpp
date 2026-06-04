@@ -1307,7 +1307,6 @@ void CommandLineInterface::assembleYul(yul::YulStack::Machine _targetMachine)
 	{
 		auto& stack = yulStacks[sourceUnitName] = yul::YulStack(
 			m_options.output.evmVersion,
-			std::nullopt,
 			m_options.optimiserSettings(),
 			m_options.output.debugInfoSelection.has_value() ?
 				m_options.output.debugInfoSelection.value() :

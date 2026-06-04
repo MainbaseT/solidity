@@ -61,7 +61,6 @@ std::optional<Error> parseAndReturnFirstError(
 {
 	YulStack stack(
 		solidity::test::CommonOptions::get().evmVersion(),
-		std::nullopt,
 		solidity::frontend::OptimiserSettings::none(),
 		DebugInfoSelection::None()
 	);
@@ -119,7 +118,6 @@ void parsePrintCompare(std::string const& _source, bool _canWarn = false)
 {
 	YulStack stack(
 		solidity::test::CommonOptions::get().evmVersion(),
-		std::nullopt,
 		OptimiserSettings::none(),
 		DebugInfoSelection::None()
 	);
@@ -206,7 +204,6 @@ BOOST_AUTO_TEST_CASE(print_string_literal_unicode)
 	std::string parsed = "object \"object\" {\n    code { let x := \"\\xe1\\xae\\xac\" }\n}\n";
 	YulStack stack(
 		solidity::test::CommonOptions::get().evmVersion(),
-		std::nullopt,
 		OptimiserSettings::none(),
 		DebugInfoSelection::None()
 	);

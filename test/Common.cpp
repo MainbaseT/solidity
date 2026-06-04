@@ -163,9 +163,9 @@ void CommonOptions::validate() const
 	}
 
 	solRequire(
-		!eofVersion().has_value() || evmVersion().supportsEOF(),
+		!eofVersion().has_value(),
 		ConfigException,
-		"EOF is not supported by EVM versions earlier than " + langutil::EVMVersion::firstWithEOF().name() + "."
+		"EOF is not supported by EVM versions earlier than " + langutil::EVMVersion::future().name() + "."
 	);
 }
 
@@ -272,7 +272,7 @@ langutil::EVMVersion CommonOptions::evmVersion() const
 
 yul::EVMDialect const& CommonOptions::evmDialect() const
 {
-	return yul::EVMDialect::strictAssemblyForEVMObjects(evmVersion(), eofVersion());
+	return yul::EVMDialect::strictAssemblyForEVMObjects(evmVersion());
 }
 
 

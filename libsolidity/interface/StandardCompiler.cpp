@@ -1780,7 +1780,6 @@ Json StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 
 	YulStack stack(
 		_inputsAndSettings.evmVersion,
-		std::nullopt,
 		_inputsAndSettings.optimiserSettings,
 		_inputsAndSettings.debugInfoSelection.has_value() ?
 			_inputsAndSettings.debugInfoSelection.value() :
