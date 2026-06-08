@@ -251,7 +251,10 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				requiredStackTop.emplace_back(Slot::makeFunctionCallReturnLabel(*callSiteID));
 			}
 		}
-		requiredStackTop += _inst.inputs | ranges::views::transform([this](InstId const& _id) { return StackSlot::makeValue(m_cfg, _id); });
+		requiredStackTop +=
+			_inst.inputs |
+			ranges::views::reverse |
+			ranges::views::transform([this](InstId const& _id) { return StackSlot::makeValue(m_cfg, _id); });
 
 		for (StackType::Depth depth{0}; depth < stack.size(); ++depth.value)
 			if (

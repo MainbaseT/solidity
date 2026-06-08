@@ -25,7 +25,7 @@
 // Block 0; (0, max 5)\nLiveIn: \l\
 // LiveOut: v3[1]\l\nUsed: \l\nv1 := calldataload(0x03)\l\
 // v3 := sload(0x00)\l\
-// v4 := eq(0x00, v3)\l\
+// v4 := eq(v3, 0x00)\l\
 // "];
 // Block0_0 -> Block0_0Exit;
 // Block0_0Exit [label="{ If v4 | { <0> Zero | <1> NonZero }}" shape=Mrecord];
@@ -40,7 +40,7 @@
 // Block0_2Exit -> Block0_1 [style="solid"];
 // Block0_3 [label="\
 // Block 3; (3, max 5)\nLiveIn: v3[1]\l\
-// LiveOut: \l\nUsed: v3[1]\l\nv8 := eq(0x01, v3)\l\
+// LiveOut: \l\nUsed: v3[1]\l\nv8 := eq(v3, 0x01)\l\
 // "];
 // Block0_3 -> Block0_3Exit;
 // Block0_3Exit [label="{ If v8 | { <0> Zero | <1> NonZero }}" shape=Mrecord];
@@ -53,7 +53,7 @@
 // 	Block 4 => v10,\l\
 // 	Block 5 => v12\l\
 // )\l\
-// sstore(0x00, phi13)\l\
+// sstore(phi13, 0x00)\l\
 // "];
 // Block0_1Exit [label="MainExit"];
 // Block0_1 -> Block0_1Exit;

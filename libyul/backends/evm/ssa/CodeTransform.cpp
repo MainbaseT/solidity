@@ -235,7 +235,7 @@ void CodeTransform::operator()(InstId _instId, StackData const& _operationInputL
 	yulAssert(m_stack.size() >= _inst.inputs.size());
 	for (auto const& [stackEntry, input]: ranges::views::zip(
 		m_stack | ranges::views::take_last(_inst.inputs.size()),
-		_inst.inputs
+		_inst.inputs | ranges::views::reverse
 	))
 		yulAssert(stackEntry.isValue() && stackEntry.value() == input);
 
