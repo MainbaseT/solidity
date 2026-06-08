@@ -35,5 +35,5 @@ void transform::optimize(ControlFlowGraphs& _cfgs)
 		transform::eliminateTrivialPhis(*cfg);
 		transform::removeIdentitiesAndNops(*cfg);
 	}
-	transform::runOutliner(_cfgs);
+	// transform::runOutliner(_cfgs);
 }

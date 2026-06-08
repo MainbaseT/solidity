@@ -34,8 +34,8 @@
 // Block0_1 [label="\
 // IN: [JUNK]\l\
 // \l\
-// [JUNK]\l\
-// __revert_0_1\l\
+// [JUNK, lit0, lit0]\l\
+// revert\l\
 // [JUNK]\l\
 // \l\
 // OUT: [JUNK]\l\
@@ -58,8 +58,8 @@
 // Block0_4 [label="\
 // IN: [JUNK, JUNK]\l\
 // \l\
-// [JUNK, JUNK]\l\
-// __revert_0_1\l\
+// [JUNK, JUNK, lit0, lit0]\l\
+// revert\l\
 // [JUNK, JUNK]\l\
 // \l\
 // OUT: [JUNK, JUNK]\l\
@@ -77,19 +77,4 @@
 // "];
 // Block0_5Exit [label="MainExit"];
 // Block0_5 -> Block0_5Exit;
-// FunctionEntry___revert_0_1_0 [label="function __revert_0_1:
-//  __revert_0_1()
-// spilled: {}"];
-// FunctionEntry___revert_0_1_0 -> Block1_0;
-// Block1_0 [label="\
-// IN: []\l\
-// \l\
-// [lit0, lit0]\l\
-// revert\l\
-// []\l\
-// \l\
-// OUT: []\l\
-// "];
-// Block1_0Exit [label="Terminated"];
-// Block1_0 -> Block1_0Exit;
 // }
