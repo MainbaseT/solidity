@@ -227,9 +227,10 @@ Both approaches allow you to provide the name of an error and additional data wh
 a failure can more easily be debugged or reacted upon.
 
 The ``send`` function can be used by anyone (who already
-has some of these coins) to send coins to anyone else. If the sender does not have
-enough coins to send, the ``if`` condition evaluates to true. As a result, the ``revert`` will cause the operation to fail
-while providing the sender with error details using the ``InsufficientBalance`` error.
+has some of these coins) to send coins to anyone else. If the sender does *not* have
+enough coins to send, the condition in ``require`` evaluates to false, triggering a ``revert``
+with the ``InsufficientBalance`` error. This error supplies the requested amount and available
+balance to the caller, which front-end applications or block explorers can surface for debugging.
 
 .. note::
     If you use
