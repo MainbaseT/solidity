@@ -563,7 +563,7 @@ private:
 							!_state.isSourceCompatible(offset, argOffset) &&  // we're not looking at the same thing
 							!_stack.isBeyondSwapRange(argOffset) &&  // the target offset should not be beyond reach
 							_state.isArgsCompatible(argOffset, offset) && // we can put argOffset -> offset
-							_state.countReachable(_stack[argOffset]) > 1 &&  // we still have another reachable copy so a subsequent dup is recoverable
+							(_state.countReachable(_stack[argOffset]) > 1 || _state.slotIsSpilled(_stack[argOffset])) &&  // a reachable copy remains, or the value is spilled and can be reloaded, so moving it is recoverable
 							(  // we only get a strict improvement if
 								!_state.isArgsCompatible(argOffset, argOffset) ||  // either the argOffset isn't in position anyway
 								_stack.offsetToDepth(offset).value == ReachableStackDepth  // or offset is at the swap edge
