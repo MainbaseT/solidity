@@ -191,31 +191,50 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 				declareJunk(stack, liveIn);
 			}
 		}
-		std::vector cumulativeCosts(stackInProposals.size(), std::numeric_limits<std::size_t>::max());
+		// For each candidate stack-in layout (one parent's proposal), reconcile every parent to it,
+		// discovering the spills needed to make each reconciliation realizable
+		std::vector<std::size_t> cumulativeGas(stackInProposals.size(), 0);
+		std::vector<spill::SpillSet> candidateSpillSets(stackInProposals.size());
 		for (std::size_t i = 0; i < stackInProposals.size(); ++i)
 		{
-			std::size_t cumulativeCost = 0;
+			spill::SpillSet candidateSpillSet = m_spillSet;
 			for (std::size_t j = 0; j < stackInProposals.size(); ++j)
 			{
-				auto proposalCopy = proposals[j];
-				Stack<GasAccumulatingCallbacks> stack(proposalCopy, {.cfg = m_cfg});
-				auto const shuffleResult = StackShuffler<GasAccumulatingCallbacks>::shuffle(
-					stack,
-					proposals[i],
-					{},
-					proposals[i].size(),
-					&m_spillSet
-				);
-				yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
-				cumulativeCost += stack.callbacks().opGas;
+				StackShufflerResult result;
+				std::size_t opGas = 0;
+				do
+				{
+					auto proposalCopy = proposals[j];
+					Stack<GasAccumulatingCallbacks> stack(proposalCopy, {.cfg = m_cfg});
+					result = StackShuffler<GasAccumulatingCallbacks>::shuffle(
+						stack, proposals[i], {}, proposals[i].size(), &candidateSpillSet);
+					opGas = stack.callbacks().opGas;
+					if (result.status == StackShufflerResult::Status::StackTooDeep)
+					{
+						yulAssert(result.culprit.isValue() && !result.culprit.isLiteralValue());
+						yulAssert(!candidateSpillSet.isSpilled(result.culprit.value()));
+						candidateSpillSet.add(result.culprit.value());
+					}
+				}
+				while (result.status == StackShufflerResult::Status::StackTooDeep);
+				yulAssert(result.status == StackShufflerResult::Status::Admissible);
+				cumulativeGas[i] += opGas;
 			}
-			cumulativeCosts[i] = cumulativeCost;
+			candidateSpillSets[i] = std::move(candidateSpillSet);
 		}
-		// Pick the proposal with the lowest cost; break ties by preferring smaller stacks
+		// Pick the candidate that spills the least; break ties by gas, then by preferring smaller stacks.
+		auto const candidateCost = [&](std::size_t const _i) {
+			return std::make_tuple(candidateSpillSets[_i].numSpilled(), cumulativeGas[_i], proposals[_i].size());
+		};
 		std::size_t best = 0;
 		for (std::size_t i = 1; i < stackInProposals.size(); ++i)
-			if (std::make_pair(cumulativeCosts[i], proposals[i].size()) < std::make_pair(cumulativeCosts[best], proposals[best].size()))
+			if (candidateCost(i) < candidateCost(best))
 				best = i;
+		yulAssert(
+			m_spillingAllowed || candidateSpillSets[best].numSpilled() == m_spillSet.numSpilled(),
+			"Stack too deep, but spilling is disabled because the function is part of a recursive call chain."
+		);
+		m_spillSet = std::move(candidateSpillSets[best]);
 		blockLayout.stackIn = std::move(proposals[best]);
 	}
 	m_resultLayout[_blockId] = blockLayout;
