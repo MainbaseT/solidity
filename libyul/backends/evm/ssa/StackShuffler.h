@@ -625,6 +625,29 @@ private:
 				}
 			}
 
+			// Dual to `dupDeepSlotIfRequired`: A deep, still-incorrect target slot whose wanted value
+			// is not on the stack at all. A push/dup grows the stack, pushing that slot one deeper.
+			// So if the deepest incorrect args slot would be pushed out of reach by growing, shrink first to keep it reachable.
+			if (
+				maybeIncorrectArgSlotDepth && maybeIncorrectArgSlotDepth->value > ReachableStackDepth
+			)
+			{
+				StackOffset const incorrectOffset{_stack.size() - maybeIncorrectArgSlotDepth->value};
+				if (!_stack.findSlotDepth(_state.targetArg(incorrectOffset)))
+				{
+					if (shrinkStack(_stack, _state))
+						return {ShuffleHelperResult::Status::StackModified};
+					// Surface a reachable, not-yet-spilled value as too deep.
+					for (StackOffset const offset: _state.stackSwapReachableRange())
+						if (
+							Slot const& blocker = _stack[offset];
+							blocker.isValue() && !blocker.isLiteralValue() && !_state.slotIsSpilled(blocker)
+						)
+							return {ShuffleHelperResult::Status::StackTooDeep, blocker};
+					yulAssert(false, "invalid state. we should always be able to either shrink or spill.");
+				}
+			}
+
 			// if we can't directly produce targetOffset, take the deepest arg that we don't have enough of and dup/push that
 			// First, prioritize duping args that are on the stack over pushing freely-generatable ones
 			for (StackOffset offset{_state.target().tailSize}; offset < _state.target().size; ++offset.value)
