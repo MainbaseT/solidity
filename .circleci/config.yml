@@ -1585,8 +1585,7 @@ jobs:
           at: /tmp/workspace
       - run:
           name: Ensure pnpm is installed if npm is present
-          # Pin to pnpm v9 as v10 introduces additional safe guards and causes failures
-          command: sudo npm install -g pnpm@9
+          command: sudo npm install -g pnpm
       - run:
           name: Retrieve EDR latest release tag
           command: |
