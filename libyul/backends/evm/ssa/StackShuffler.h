@@ -233,10 +233,11 @@ public:
 
 	[[nodiscard]] static StackShufflerResult shuffle(
 		Stack<Callback>& _stack,
-		StackData const& _target
+		StackData const& _target,
+		spill::SpillSet const* const _spilledVariables = nullptr
 	)
 	{
-		return shuffle(_stack, _target, {}, _target.size());
+		return shuffle(_stack, _target, {}, _target.size(), _spilledVariables);
 	}
 
 private:
@@ -562,7 +563,7 @@ private:
 							!_state.isSourceCompatible(offset, argOffset) &&  // we're not looking at the same thing
 							!_stack.isBeyondSwapRange(argOffset) &&  // the target offset should not be beyond reach
 							_state.isArgsCompatible(argOffset, offset) && // we can put argOffset -> offset
-							_state.countReachable(_stack[argOffset]) > 1 &&  // we still have another reachable copy so a subsequent dup is recoverable
+							(_state.countReachable(_stack[argOffset]) > 1 || _state.slotIsSpilled(_stack[argOffset])) &&  // a reachable copy remains, or the value is spilled and can be reloaded, so moving it is recoverable
 							(  // we only get a strict improvement if
 								!_state.isArgsCompatible(argOffset, argOffset) ||  // either the argOffset isn't in position anyway
 								_stack.offsetToDepth(offset).value == ReachableStackDepth  // or offset is at the swap edge
@@ -621,6 +622,29 @@ private:
 						return {ShuffleHelperResult::Status::StackTooDeep, _state.targetArg(targetOffset)};
 					_stack.dup(*sourceDepth);
 					return {ShuffleHelperResult::Status::StackModified};
+				}
+			}
+
+			// Dual to `dupDeepSlotIfRequired`: A deep, still-incorrect target slot whose wanted value
+			// is not on the stack at all. A push/dup grows the stack, pushing that slot one deeper.
+			// So if the deepest incorrect args slot would be pushed out of reach by growing, shrink first to keep it reachable.
+			if (
+				maybeIncorrectArgSlotDepth && maybeIncorrectArgSlotDepth->value > ReachableStackDepth
+			)
+			{
+				StackOffset const incorrectOffset{_stack.size() - maybeIncorrectArgSlotDepth->value};
+				if (!_stack.findSlotDepth(_state.targetArg(incorrectOffset)))
+				{
+					if (shrinkStack(_stack, _state))
+						return {ShuffleHelperResult::Status::StackModified};
+					// Surface a reachable, not-yet-spilled value as too deep.
+					for (StackOffset const offset: _state.stackSwapReachableRange())
+						if (
+							Slot const& blocker = _stack[offset];
+							blocker.isValue() && !blocker.isLiteralValue() && !_state.slotIsSpilled(blocker)
+						)
+							return {ShuffleHelperResult::Status::StackTooDeep, blocker};
+					yulAssert(false, "invalid state. we should always be able to either shrink or spill.");
 				}
 			}
 
