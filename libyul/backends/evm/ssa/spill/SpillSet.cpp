@@ -37,9 +37,11 @@ StackData computeOperationOut(
 	InstId const _value
 )
 {
-	SSACFG::BlockId const block = _cfg.inst(_value).block;
+	InstId const producer = _cfg.isProjection(_value) ? _cfg.inst(_value).inputs.front() : _value;
+
+	SSACFG::BlockId const block = _cfg.inst(producer).block;
 	auto const& blockLayout = _layout[block];
-	yulAssert(blockLayout, fmt::format("producer {}'s block has no layout", _value));
+	yulAssert(blockLayout, fmt::format("producer {}'s block has no layout", producer));
 
 	std::size_t opIndex = 0;
 	bool found = false;
@@ -47,22 +49,22 @@ StackData computeOperationOut(
 	{
 		if (!_cfg.isOperation(id))
 			continue;
-		if (id == _value)
+		if (id == producer)
 		{
 			found = true;
 			break;
 		}
 		++opIndex;
 	}
-	yulAssert(found, fmt::format("producer {} not found in its block's instructions", _value));
+	yulAssert(found, fmt::format("producer {} not found in its block's instructions", producer));
 	yulAssert(opIndex < blockLayout->operationIn.size());
 
 	StackData opOutStack = blockLayout->operationIn[opIndex];
-	SSACFG::Inst const& inst = _cfg.inst(_value);
+	SSACFG::Inst const& inst = _cfg.inst(producer);
 	yulAssert(opOutStack.size() >= inst.inputs.size(), "operationIn smaller than input count");
 	for (std::size_t i = 0; i < inst.inputs.size(); ++i)
 		opOutStack.pop_back();
-	_cfg.forEachOutput(_value, [&](InstId const id) {
+	_cfg.forEachOutput(producer, [&](InstId const id) {
 		opOutStack.push_back(StackSlot::makeValue(_cfg, id));
 	});
 	return opOutStack;
