@@ -496,6 +496,46 @@ BOOST_AUTO_TEST_CASE(ethdebug_resources)
 	BOOST_REQUIRE(resources["compilation"]["sources"][1]["language"] == "Yul");
 }
 
+BOOST_AUTO_TEST_CASE(can_be_functional)
+{
+	// Non-ordinary jump type → false regardless of item type.
+	for (auto jumpType: {AssemblyItem::JumpType::IntoFunction, AssemblyItem::JumpType::OutOfFunction})
+	{
+		auto item = AssemblyItem(Instruction::JUMP);
+		item.setJumpType(jumpType);
+		BOOST_CHECK(!item.canBeFunctional());
+	}
+
+	// Operation: regular instructions → true.
+	BOOST_CHECK(AssemblyItem(Instruction::ADD).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(Instruction::MUL).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(Instruction::STOP).canBeFunctional());
+
+	// Operation: DUP/SWAP → false.
+	for (unsigned n = 1; n <= 16; ++n)
+	{
+		BOOST_CHECK(!AssemblyItem(dupInstruction(n)).canBeFunctional());
+		BOOST_CHECK(!AssemblyItem(swapInstruction(n)).canBeFunctional());
+	}
+
+	// Push variants → true.
+	BOOST_CHECK(AssemblyItem(Push, 42).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(PushTag, 0).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(PushData, 0).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(PushSub, 0).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(PushSubSize, 0).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(PushProgramSize).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(PushLibraryAddress, 0).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(PushDeployTimeAddress).canBeFunctional());
+	BOOST_CHECK(AssemblyItem(PushImmutable, 0).canBeFunctional());
+
+	// Types that cannot be functional → false.
+	BOOST_CHECK(!AssemblyItem(Tag, 0).canBeFunctional());
+	BOOST_CHECK(!AssemblyItem(AssignImmutable, 0).canBeFunctional());
+	BOOST_CHECK(!AssemblyItem(bytes{0x60, 0x00}, 0, 1).canBeFunctional());  // VerbatimBytecode
+	BOOST_CHECK(!AssemblyItem(UndefinedItem).canBeFunctional());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 } // end namespaces
