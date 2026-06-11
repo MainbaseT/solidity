@@ -119,7 +119,7 @@ Slot parseSlot(ParsedIdentifierTable& _table, std::string_view _token)
 		if (_token.starts_with("lit"))
 		{
 			if (auto const num = solidity::util::parseArithmetic<InstId::ValueType>(_token.substr(3)))
-				return _table.store.appendLiteral({0}, u256(*num));
+				return _table.store.appendLiteral({0}, u256(*num)).first;
 			throw std::runtime_error(fmt::format("Couldn't parse literal token: {}", _token));
 		}
 		if (_token.starts_with("v"))
