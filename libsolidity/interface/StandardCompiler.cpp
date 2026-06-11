@@ -1335,7 +1335,6 @@ Json StandardCompiler::importEVMAssembly(StandardCompiler::InputsAndSettings _in
 
 	evmasm::EVMAssemblyStack stack(
 		_inputsAndSettings.evmVersion,
-		std::nullopt,
 		evmasm::Assembly::OptimiserSettings::translateSettings(
 			_inputsAndSettings.optimiserSettings
 		)
