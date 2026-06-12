@@ -1382,18 +1382,16 @@ BOOST_AUTO_TEST_CASE(jumpdest_removal_subassemblies)
 		t1.toSubAssemblyTag(subId).pushTag(),
 		u256(8)
 	};
-	BOOST_REQUIRE(main.codeSections().size() == 1);
 	BOOST_CHECK_EQUAL_COLLECTIONS(
-		main.codeSections().at(0).items.begin(),main.codeSections().at(0).items.end(),
+		main.items().begin(), main.items().end(),
 		expectationMain.begin(), expectationMain.end()
 	);
 
 	AssemblyItems expectationSub{
 		u256(1), t1.tag(), u256(2), Instruction::JUMP, t4.tag(), u256(7), t4.pushTag(), Instruction::JUMP
 	};
-	BOOST_REQUIRE(sub->codeSections().size() == 1);
 	BOOST_CHECK_EQUAL_COLLECTIONS(
-		sub->codeSections().at(0).items.begin(), sub->codeSections().at(0).items.end(),
+		sub->items().begin(), sub->items().end(),
 		expectationSub.begin(), expectationSub.end()
 	);
 }

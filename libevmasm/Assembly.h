@@ -59,10 +59,7 @@ public:
 		m_evmVersion(_evmVersion),
 		m_creation(_creation),
 		m_name(std::move(_name))
-	{
-		// Code section number 0 has to be non-returning.
-		m_codeSections.emplace_back(CodeSection{0, 0, true, {}});
-	}
+	{}
 
 	AssemblyItem newTag() { assertThrow(m_usedTags < 0xffffffff, AssemblyException, ""); return AssemblyItem(Tag, m_usedTags++); }
 	AssemblyItem newPushTag() { assertThrow(m_usedTags < 0xffffffff, AssemblyException, ""); return AssemblyItem(PushTag, m_usedTags++); }
@@ -183,25 +180,8 @@ public:
 
 	bool isCreation() const { return m_creation; }
 
-	struct CodeSection
-	{
-		uint8_t inputs = 0;
-		// Number of outputs needs to be set properly even for non-returning function.
-		// It matters in case of stack height calculation of the function call instruction.
-		uint8_t outputs = 0;
-		bool nonReturning = false;
-		AssemblyItems items{};
-	};
-
-	std::vector<CodeSection>& codeSections()
-	{
-		return m_codeSections;
-	}
-
-	std::vector<CodeSection> const& codeSections() const
-	{
-		return m_codeSections;
-	}
+	AssemblyItems& items() { return m_items; }
+	AssemblyItems const& items() const { return m_items; }
 
 protected:
 	/// Does the same operations as @a optimise, but should only be applied to a sub and
@@ -260,8 +240,7 @@ protected:
 	/// Data that is appended to the very end of the contract.
 	bytes m_auxiliaryData;
 	std::vector<std::shared_ptr<Assembly>> m_subs;
-	std::vector<CodeSection> m_codeSections;
-	uint16_t m_currentCodeSection = 0;
+	AssemblyItems m_items;
 	std::map<util::h256, std::string> m_strings;
 	std::map<util::h256, std::string> m_libraries; ///< Identifiers of libraries to be linked.
 	std::map<util::h256, std::string> m_immutables; ///< Identifiers of immutables.
