@@ -341,6 +341,21 @@ private:
 		StackSlot culprit = StackSlot::makeJunk();
 	};
 
+	/// Postcondition on every stack-too-deep culprit: it must be a non-literal value that is not spilled, so that
+	/// spilling it is always possible
+	static StackSlot validatedCulprit(StackSlot const& _culprit, detail::State const& _state)
+	{
+		yulAssert(
+			_culprit.isValue() && !_culprit.isLiteralValue(),
+			"stack-too-deep culprit must be a spillable, non-literal value"
+		);
+		yulAssert(
+			!_state.slotIsSpilled(_culprit),
+			"stack-too-deep culprit must not be spilled already"
+		);
+		return _culprit;
+	}
+
 	/// Make a local step in stack space that should bring us closer to the target.
 	static StackShufflerResult shuffleStep(Stack<Callback>& _stack, detail::State const& _state)
 	{
@@ -350,8 +365,8 @@ private:
 			if (shrinkStack(_stack, _state))
 				return {StackShufflerResult::Status::Continue};
 			// couldn't shrink to required size, need to spill to memory or increase target size;
-			// shrinking can always pop a junk, literal or activated-spill top, so a failure results in a plain unspilled value on top
-			return {StackShufflerResult::Status::StackTooDeep, _stack.top()};
+			// shrinking can always pop a junk, literal, or spilled top, so a failure leaves a plain value on top
+			return {StackShufflerResult::Status::StackTooDeep, validatedCulprit(_stack.top(), _state)};
 		}
 		yulAssert(_stack.size() <= _state.target().size, "I1 violated: Stack size too large");
 
@@ -366,7 +381,7 @@ private:
 			if (shrinkStack(_stack, _state))
 				return {StackShufflerResult::Status::Continue};
 
-			return {StackShufflerResult::Status::StackTooDeep, _stack.top()};
+			return {StackShufflerResult::Status::StackTooDeep, validatedCulprit(_stack.top(), _state)};
 		}
 
 		// this will either grow the tail as needed, swap down something from args that needs to be in the tail,
@@ -414,7 +429,7 @@ private:
 				!candidate.isLiteralValue() &&
 				!_state.slotIsSpilled(candidate)
 			)
-				return {StackShufflerResult::Status::StackTooDeep, candidate};
+				return {StackShufflerResult::Status::StackTooDeep, validatedCulprit(candidate, _state)};
 		}
 
 		yulAssert(false, "reached final and forbidden state");
@@ -482,7 +497,7 @@ private:
 				if (shrinkStack(_stack, _state))
 					return {ShuffleHelperResult::Status::StackModified};
 
-				return {ShuffleHelperResult::Status::StackTooDeep, _stack[offset]};
+				return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(_stack[offset], _state)};
 			}
 		}
 		return {ShuffleHelperResult::Status::NoAction};
@@ -563,7 +578,7 @@ private:
 				if (shrinkStack(_stack, _state))
 					return {ShuffleHelperResult::Status::StackModified};
 
-				return {ShuffleHelperResult::Status::StackTooDeep, _stack.slot(*depth)};
+				return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(_stack.slot(*depth), _state)};
 			}
 		}
 		return {ShuffleHelperResult::Status::NoAction};
@@ -733,7 +748,7 @@ private:
 					}
 
 					if (!_stack.dupReachable(*sourceDepth))
-						return {ShuffleHelperResult::Status::StackTooDeep, _state.targetArg(targetOffset)};
+						return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(_state.targetArg(targetOffset), _state)};
 					_stack.dup(*sourceDepth);
 					return {ShuffleHelperResult::Status::StackModified};
 				}
@@ -757,7 +772,7 @@ private:
 							Slot const& blocker = _stack[offset];
 							blocker.isValue() && !blocker.isLiteralValue() && !_state.slotIsSpilled(blocker)
 						)
-							return {ShuffleHelperResult::Status::StackTooDeep, blocker};
+							return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(blocker, _state)};
 					yulAssert(false, "invalid state. we should always be able to either shrink or spill.");
 				}
 			}
@@ -783,7 +798,7 @@ private:
 						return {ShuffleHelperResult::Status::StackModified};
 					}
 					if (!_state.slotCanBeLoadedOrPushed(arg))
-						return {ShuffleHelperResult::Status::StackTooDeep, arg};
+						return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(arg, _state)};
 				}
 				yulAssert(_state.slotCanBeLoadedOrPushed(arg));
 				_stack.push(arg);
@@ -810,12 +825,12 @@ private:
 					if (auto depth = _stack.findSlotDepth(arg))
 					{
 						if (_stack.isBeyondSwapRange(*depth))
-							return {ShuffleHelperResult::Status::StackTooDeep, arg};
+							return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(arg, _state)};
 						// if we can't outright dup the slot, let's shrink the stack first
 						if (!_stack.dupReachable(*depth))
 						{
 							if (!shrinkStack(_stack, _state))
-								return {ShuffleHelperResult::Status::StackTooDeep, arg};
+								return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(arg, _state)};
 							return {ShuffleHelperResult::Status::StackModified};
 						}
 						_stack.dup(*depth);
@@ -824,7 +839,7 @@ private:
 					else
 					{
 						if (!_state.slotCanBeLoadedOrPushed(arg))
-							return {ShuffleHelperResult::Status::StackTooDeep, arg};
+							return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(arg, _state)};
 						auto result = dupDeepSlotIfRequired(_stack, _state);
 						if (result.status == ShuffleHelperResult::Status::StackTooDeep)
 							return result;
@@ -899,7 +914,7 @@ private:
 						return {ShuffleHelperResult::Status::StackModified};
 					}
 				// we needed to bring the slot into tail but couldn't, not enough stack target space -> spill to memory
-				return {ShuffleHelperResult::Status::StackTooDeep, _stack[offset]};
+				return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(_stack[offset], _state)};
 			}
 		}
 
