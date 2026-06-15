@@ -8,6 +8,7 @@ Compiler Features:
 
 Bugfixes:
 * NatSpec: Disallow `@return` tag in event documentation.
+* SMTChecker: Fix incorrect handling of constant operands of unary operations.
 
 
 ### 0.8.35 (2026-04-29)
