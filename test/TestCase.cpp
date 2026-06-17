@@ -144,19 +144,8 @@ void EVMVersionRestrictedTestCase::processEVMVersionSetting()
 		m_shouldRun = false;
 }
 
-void EVMVersionRestrictedTestCase::processBytecodeFormatSetting()
-{
-	std::string bytecodeFormatString = m_reader.stringSetting("bytecodeFormat", "legacy");
-	if (bytecodeFormatString == "legacy")
-		return;
-
-	if (bytecodeFormatString != "legacy")
-		BOOST_THROW_EXCEPTION(std::runtime_error{"Invalid bytecodeFormat flag: \"" + bytecodeFormatString + "\""});
-}
-
 EVMVersionRestrictedTestCase::EVMVersionRestrictedTestCase(std::string const& _filename):
 	TestCase(_filename)
 {
 	processEVMVersionSetting();
-	processBytecodeFormatSetting();
 }

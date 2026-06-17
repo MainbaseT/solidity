@@ -5,7 +5,6 @@ object "a" {
 }
 // ====
 // EVMVersion: >=constantinople
-// bytecodeFormat: legacy
 // ----
 // Assembly:
 //     /* "source":22:29   */

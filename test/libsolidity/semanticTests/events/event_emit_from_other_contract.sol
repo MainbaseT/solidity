@@ -14,7 +14,6 @@ contract C {
     }
 }
 // ====
-// bytecodeFormat: legacy
 // ----
 // constructor() ->
 // gas irOptimized: 113970

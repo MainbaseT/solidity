@@ -31,6 +31,5 @@ contract C {
     }
 }
 // ====
-// bytecodeFormat: legacy
 // ----
 // test() -> true
