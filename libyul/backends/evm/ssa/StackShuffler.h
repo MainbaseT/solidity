@@ -49,6 +49,17 @@ inline bool slotCanBeLoadedOrPushed(StackSlot const& _slot, spill::SpillSet cons
 	return Stack<>::canBeFreelyGenerated(_slot) || slotIsSpilled(_slot, _spilledVariables);
 }
 
+template<typename Callback>
+void exchange(Stack<Callback>& _stack, StackOffset _off1, StackOffset _off2)
+{
+	yulAssert(_stack.isValidSwapTarget(_off1) && _stack.isValidSwapTarget(_off2));
+	auto const topOffset = _stack.depthToOffset(StackDepth{0});
+	yulAssert(_off1 != topOffset && _off2 != topOffset && _off1 != _off2);
+	_stack.swap(_off1);
+	_stack.swap(_off2);
+	_stack.swap(_off1);
+}
+
 /// Contains information about the shuffling target, aggregates over args and live out to
 /// provide a lower bound for the slot distribution.
 struct Target
@@ -111,6 +122,8 @@ public:
 	bool isSourceCompatible(StackOffset _sourceOffset1, StackOffset _sourceOffset2) const;
 	/// Checks if swapping the current offset with top makes progress toward target
 	bool isSafeToSwapWithTop(StackOffset _offset) const;
+	/// Checks if swapping the current offset with non-top argument makes progress toward target. Returns the argument or nullopt.
+	std::optional<StackOffset> canSwapWithNonTopArg(StackOffset _offset) const;
 	/// Shuffling target information
 	Target const& target() const;
 
@@ -419,6 +432,24 @@ private:
 			bool const haveMoreAbove = *depth < _stack.offsetToDepth(sourceOffset);
 			if (haveMoreAbove)
 				continue;
+			if (!needMore)
+			{
+				yulAssert(neededInArgs);
+				// We need more in args, but we have enough overall, try to swap it into args region, instead of dupping
+				if (_stack.isValidSwapTarget(sourceOffset))
+				{
+					if (_state.isSafeToSwapWithTop(sourceOffset))
+					{
+						_stack.swap(sourceOffset);
+						return {ShuffleHelperResult::Status::StackModified};
+					}
+					if (auto argOffset = _state.canSwapWithNonTopArg(sourceOffset))
+					{
+						detail::exchange(_stack, argOffset.value(), sourceOffset);
+						return {ShuffleHelperResult::Status::StackModified};
+					}
+				}
+			}
 
 			if (_stack.dupReachable(sourceOffset))
 			{
