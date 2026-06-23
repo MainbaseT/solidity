@@ -188,6 +188,23 @@ bool State::isSafeToSwapWithTop(StackOffset const _offset) const
 		);
 }
 
+std::optional<StackOffset> State::canSwapWithNonTopArg(StackOffset const _offset) const
+{
+	auto const& slot = m_stackData[_offset.value];
+	for (auto argOffset: stackArgsRange())
+	{
+		if (argOffset.value == m_stackData.size() - 1)
+			continue;
+		auto const& argSlot = m_stackData[argOffset.value];
+		if (slot == argSlot)
+			continue;
+		bool const goodCandidateForSwap = !isArgsCompatible(argOffset, argOffset) && !requiredInArgs(argSlot);
+		if (goodCandidateForSwap)
+			return argOffset;
+	}
+	return std::nullopt;
+}
+
 Target const& State::target() const
 {
 	return m_target;

@@ -122,6 +122,8 @@ public:
 	bool isSourceCompatible(StackOffset _sourceOffset1, StackOffset _sourceOffset2) const;
 	/// Checks if swapping the current offset with top makes progress toward target
 	bool isSafeToSwapWithTop(StackOffset _offset) const;
+	/// Checks if swapping the current offset with non-top argument makes progress toward target. Returns the argument or nullopt.
+	std::optional<StackOffset> canSwapWithNonTopArg(StackOffset _offset) const;
 	/// Shuffling target information
 	Target const& target() const;
 
