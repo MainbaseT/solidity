@@ -49,6 +49,17 @@ inline bool slotCanBeLoadedOrPushed(StackSlot const& _slot, spill::SpillSet cons
 	return Stack<>::canBeFreelyGenerated(_slot) || slotIsSpilled(_slot, _spilledVariables);
 }
 
+template<typename Callback>
+void exchange(Stack<Callback>& _stack, StackOffset _off1, StackOffset _off2)
+{
+	yulAssert(_stack.isValidSwapTarget(_off1) && _stack.isValidSwapTarget(_off2));
+	auto const topOffset = _stack.depthToOffset(StackDepth{0});
+	yulAssert(_off1 != topOffset && _off2 != topOffset && _off1 != _off2);
+	_stack.swap(_off1);
+	_stack.swap(_off2);
+	_stack.swap(_off1);
+}
+
 /// Contains information about the shuffling target, aggregates over args and live out to
 /// provide a lower bound for the slot distribution.
 struct Target
