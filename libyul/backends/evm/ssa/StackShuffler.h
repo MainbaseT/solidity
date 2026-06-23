@@ -432,6 +432,24 @@ private:
 			bool const haveMoreAbove = *depth < _stack.offsetToDepth(sourceOffset);
 			if (haveMoreAbove)
 				continue;
+			if (!needMore)
+			{
+				yulAssert(neededInArgs);
+				// We need more in args, but we have enough overall, try to swap it into args region, instead of dupping
+				if (_stack.isValidSwapTarget(sourceOffset))
+				{
+					if (_state.isSafeToSwapWithTop(sourceOffset))
+					{
+						_stack.swap(sourceOffset);
+						return {ShuffleHelperResult::Status::StackModified};
+					}
+					if (auto argOffset = _state.canSwapWithNonTopArg(sourceOffset))
+					{
+						detail::exchange(_stack, argOffset.value(), sourceOffset);
+						return {ShuffleHelperResult::Status::StackModified};
+					}
+				}
+			}
 
 			if (_stack.dupReachable(sourceOffset))
 			{
