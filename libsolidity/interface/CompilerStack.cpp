@@ -268,7 +268,7 @@ void CompilerStack::setLibraries(std::map<std::string, util::h160> const& _libra
 	m_libraries = _libraries;
 }
 
-void CompilerStack::setOptimiserSettings(bool _optimize, size_t _runs)
+void CompilerStack::setOptimiserSettings(bool _optimize, std::uint64_t _runs)
 {
 	OptimiserSettings settings = _optimize ? OptimiserSettings::standard() : OptimiserSettings::minimal();
 	settings.expectedExecutionsPerDeployment = _runs;
@@ -1777,9 +1777,8 @@ std::string CompilerStack::createMetadata(Contract const& _contract, bool _forIR
 		}
 	}
 
-	static_assert(sizeof(m_optimiserSettings.expectedExecutionsPerDeployment) <= sizeof(Json::number_integer_t), "Invalid word size.");
-	solAssert(static_cast<Json::number_integer_t>(m_optimiserSettings.expectedExecutionsPerDeployment) < std::numeric_limits<Json::number_integer_t>::max(), "");
-	meta["settings"]["optimizer"]["runs"] = Json::number_integer_t(m_optimiserSettings.expectedExecutionsPerDeployment);
+	static_assert(std::is_same_v<decltype(m_optimiserSettings.expectedExecutionsPerDeployment), Json::number_unsigned_t>);
+	meta["settings"]["optimizer"]["runs"] = m_optimiserSettings.expectedExecutionsPerDeployment;
 
 	/// Backwards compatibility: If set to one of the default settings, do not provide details.
 	OptimiserSettings settingsWithoutRuns = m_optimiserSettings;
