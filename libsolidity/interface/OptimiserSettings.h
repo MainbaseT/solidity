@@ -23,9 +23,8 @@
 
 #pragma once
 
-#include <liblangutil/Exceptions.h>
+#include <libsolutil/Assertions.h>
 
-#include <cstddef>
 #include <string>
 
 namespace solidity::frontend
