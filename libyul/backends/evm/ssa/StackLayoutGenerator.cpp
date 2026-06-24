@@ -275,16 +275,10 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 			ranges::views::reverse |
 			ranges::views::transform([this](InstId const& _id) { return StackSlot::makeValue(m_cfg, _id); });
 
-		for (StackType::Depth depth{0}; depth < stack.size(); ++depth.value)
-			if (
-				stack.slot(depth).isValue() &&
-				!opLiveOutWithoutOutputs.contains(stack.slot(depth).value()) &&
-				ranges::find(requiredStackTop, stack.slot(depth)) == ranges::end(requiredStackTop)
-			)
-				stack.declareJunk(depth);
-
-		StackSlotLiveness const opLiveOutSlots = toStackSlotLiveness(m_cfg, opLiveOutWithoutOutputs);
 		{
+			// Values that are dead before the operation are left on the stack; the shuffle to the
+			// optimal target pops them as surplus as needed
+			StackSlotLiveness const opLiveOutSlots = toStackSlotLiveness(m_cfg, opLiveOutWithoutOutputs);
 			auto [target, plannedSpillSet] = findOptimalTarget(
 				stack.data(),
 				requiredStackTop,
