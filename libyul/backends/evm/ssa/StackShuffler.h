@@ -73,7 +73,6 @@ struct Target
 
 	StackData const& args;
 	StackSlotLiveness const& liveOut;
-	spill::SpillSet const* const spilledVariables;
 	std::size_t const size;
 	std::size_t const tailSize;
 	boost::container::flat_map<StackSlot, size_t> minCount;
@@ -195,47 +194,35 @@ class StackShuffler
 	using Slot = StackSlot;
 
 public:
+	/// Shuffles the stack toward the target over a fixed spill set. A stack-too-deep state is
+	/// propagated to the caller
 	[[nodiscard]] static StackShufflerResult shuffle(
 		Stack<Callback>& _stack,
 		StackData const& _args,
 		StackSlotLiveness const& _liveOut,
-		std::size_t _targetStackSize,
+		std::size_t const _targetStackSize,
 		spill::SpillSet const* const _spilledVariables = nullptr
 	)
 	{
-		detail::Target const target(_args, _liveOut, _targetStackSize, _spilledVariables);
-		// If the caller has wired up a spill set, the shuffler can reduce the effective liveOut
-		// size by spilling; otherwise the liveOut must fit into the target up front.
-		if (!_spilledVariables)
-			yulAssert(_liveOut.size() <= target.size, "not enough tail space");
-		{
-			// check that all required values are on stack
-			detail::State const state(_stack.data(), target, _spilledVariables, ReachableStackDepth);
-			for (auto const& liveSlot: _liveOut | ranges::views::keys)
-				yulAssert(
-					!_stack.canBeFreelyGenerated(liveSlot) &&
-					(ranges::contains(_stack.data(), liveSlot) || detail::slotIsSpilled(liveSlot, _spilledVariables))
-				);
-			for (auto const& arg: _args)
-				yulAssert(detail::slotCanBeLoadedOrPushed(arg, _spilledVariables) || ranges::contains(_stack.data(), arg));
-		}
-
-		static std::size_t constexpr maxIterations = 1000;
+		checkPreconditions(_stack, _args, _liveOut, _targetStackSize, _spilledVariables);
 		std::size_t i = 0;
 		while (true)
 		{
-			detail::State const state(_stack.data(), target, _spilledVariables, ReachableStackDepth);
-			auto result = shuffleStep(_stack, state);
+			auto result = runStep(_stack, _args, _liveOut, _targetStackSize, _spilledVariables);
 			if (result.status == StackShufflerResult::Status::Admissible)
+				return result;
+			if (result.status == StackShufflerResult::Status::StackTooDeep)
 			{
-				yulAssert(state.admissible());
+				// Surface the stuck state to the caller. The culprit cannot already be spilled, otherwise
+				// the step would have reloaded it.
+				yulAssert(
+					!detail::slotIsSpilled(result.culprit, _spilledVariables),
+					"stuck on an already active spill - the shuffle step should have recovered"
+				);
 				return result;
 			}
-			if (result.status == StackShufflerResult::Status::StackTooDeep)
-				return result;
 			yulAssert(result.status == StackShufflerResult::Status::Continue);
-			++i;
-			if (i == maxIterations)
+			if (++i == maxIterations)
 			{
 				result.status = StackShufflerResult::Status::MaxIterationsReached;
 				return result;
@@ -253,7 +240,100 @@ public:
 		return shuffle(_stack, _target, {}, _target.size(), _spilledVariables);
 	}
 
+	/// Like `shuffle`, but resolves stuck states in place: a recoverable stack-too-deep adds its culprit to
+	/// `_spilledVariables` and continues the same loop, so the spill takes effect without restarting the shuffle.
+	[[nodiscard]] static StackShufflerResult shuffleWithSpillDiscovery(
+		Stack<Callback>& _stack,
+		StackData const& _args,
+		StackSlotLiveness const& _liveOut,
+		std::size_t const _targetStackSize,
+		spill::SpillSet& _spilledVariables
+	)
+	{
+		checkPreconditions(_stack, _args, _liveOut, _targetStackSize, &_spilledVariables);
+		std::size_t i = 0;
+		while (true)
+		{
+			auto result = runStep(_stack, _args, _liveOut, _targetStackSize, &_spilledVariables);
+			if (result.status == StackShufflerResult::Status::Admissible)
+				return result;
+			if (result.status == StackShufflerResult::Status::StackTooDeep)
+			{
+				// The culprit cannot already be spilled, otherwise the step would have reloaded it.
+				yulAssert(
+					!detail::slotIsSpilled(result.culprit, &_spilledVariables),
+					"stuck on an already active spill - the shuffle step should have recovered"
+				);
+				// Spill the culprit and continue the same loop; the next step rebuilds target/state and so
+				// observes the new spill without restarting the shuffle.
+				yulAssert(result.culprit.isValue() && !result.culprit.isLiteralValue());
+				_spilledVariables.add(result.culprit.value());
+				result.status = StackShufflerResult::Status::Continue;
+			}
+			yulAssert(result.status == StackShufflerResult::Status::Continue);
+			if (++i == maxIterations)
+			{
+				result.status = StackShufflerResult::Status::MaxIterationsReached;
+				return result;
+			}
+		}
+		yulAssert(false);
+	}
+
+	[[nodiscard]] static StackShufflerResult shuffleWithSpillDiscovery(
+		Stack<Callback>& _stack,
+		StackData const& _target,
+		spill::SpillSet& _spilledVariables
+	)
+	{
+		return shuffleWithSpillDiscovery(_stack, _target, {}, _target.size(), _spilledVariables);
+	}
+
 private:
+	static std::size_t constexpr maxIterations = 1000;
+
+	/// Entry preconditions shared by both shuffle variants. Hold for the initial stack only, so they are
+	/// checked once per call rather than on every (potentially partially-shuffled) iteration.
+	static void checkPreconditions(
+		Stack<Callback> const& _stack,
+		StackData const& _args,
+		StackSlotLiveness const& _liveOut,
+		std::size_t const _targetStackSize,
+		spill::SpillSet const* const _spilledVariables
+	)
+	{
+		// If the caller has wired up a spill set, the shuffler can reduce the effective liveOut
+		// size by spilling; otherwise the liveOut must fit into the target up front.
+		if (!_spilledVariables)
+			yulAssert(_liveOut.size() <= _targetStackSize, "not enough tail space");
+		// check that all required values are on stack
+		for (auto const& liveSlot: _liveOut | ranges::views::keys)
+			yulAssert(
+				!_stack.canBeFreelyGenerated(liveSlot) &&
+				(ranges::contains(_stack.data(), liveSlot) || detail::slotIsSpilled(liveSlot, _spilledVariables))
+			);
+		for (auto const& arg: _args)
+			yulAssert(detail::slotCanBeLoadedOrPushed(arg, _spilledVariables) || ranges::contains(_stack.data(), arg));
+	}
+
+	/// A single read-only stepping iteration toward the target. Never mutates the spill set; both shuffle
+	/// loops decide what to do with a returned `StackTooDeep`.
+	[[nodiscard]] static StackShufflerResult runStep(
+		Stack<Callback>& _stack,
+		StackData const& _args,
+		StackSlotLiveness const& _liveOut,
+		std::size_t const _targetStackSize,
+		spill::SpillSet const* const _spilledVariables
+	)
+	{
+		detail::Target const target(_args, _liveOut, _targetStackSize, _spilledVariables);
+		detail::State const state(_stack.data(), target, _spilledVariables, ReachableStackDepth);
+		auto const result = shuffleStep(_stack, state);
+		if (result.status == StackShufflerResult::Status::Admissible)
+			yulAssert(state.admissible());
+		return result;
+	}
+
 	struct ShuffleHelperResult
 	{
 		enum class Status { NoAction, StackModified, StackTooDeep };
@@ -269,7 +349,8 @@ private:
 		{
 			if (shrinkStack(_stack, _state))
 				return {StackShufflerResult::Status::Continue};
-			// couldn't shrink to required size, need to spill to memory or increase target size
+			// couldn't shrink to required size, need to spill to memory or increase target size;
+			// shrinking can always pop a junk, literal or activated-spill top, so a failure results in a plain unspilled value on top
 			return {StackShufflerResult::Status::StackTooDeep, _stack.top()};
 		}
 		yulAssert(_stack.size() <= _state.target().size, "I1 violated: Stack size too large");
@@ -382,9 +463,11 @@ private:
 		// dup up the deepest slot that is required in args (or compress if unreachable)
 		for (StackOffset offset: _state.stackRange())
 		{
-			// if we need the slot in args and there's no slot of the same kind further up
+			// if we need the slot in args and there's no slot of the same kind further up;
+			// spills are exempt as they can be reloaded when their position is filled
 			if (
 				_state.requiredInArgs(_stack[offset]) &&
+				!_state.slotIsSpilled(_stack[offset]) &&
 				ranges::find(ranges::begin(_stack) + static_cast<std::ptrdiff_t>(offset.value) + 1, ranges::end(_stack), _stack[offset]) == ranges::end(_stack)
 			)
 			{
@@ -417,8 +500,8 @@ private:
 		{
 			// This slot needs to be moved into args and there is no tail slot of the same kind further up in the stack.
 			auto const& endangeredSlot = _stack[sourceOffset];
-			// no need to dup deep junk
-			if (endangeredSlot.isJunk())
+			// no need to dup deep junk; spilled slots can be reloaded and need no rescue either
+			if (endangeredSlot.isJunk() || _state.slotIsSpilled(endangeredSlot))
 				continue;
 			bool const neededInArgs = _state.targetArgsCount(endangeredSlot) > _state.countInArgs(endangeredSlot);
 			bool const needMore = _state.targetMinCount(endangeredSlot) > _state.count(endangeredSlot);
@@ -847,10 +930,11 @@ private:
 		yulAssert(!_stack.empty(), "Stack is empty, can't shrink");
 
 		StackOffset const stackTop{_stack.size() - 1};
-		// pop top if it is junk (ie actual junk, not in args, not in live out)
+		// pop top if it is junk (ie actual junk, not in args, not in live out) or spilled
 		if (
 			_stack[stackTop].isJunk() ||
-			(!_state.requiredInArgs(_stack[stackTop]) && !_state.requiredInTail(_stack[stackTop]))
+			(!_state.requiredInArgs(_stack[stackTop]) && !_state.requiredInTail(_stack[stackTop])) ||
+			_state.slotIsSpilled(_stack[stackTop])
 		)
 		{
 			_stack.pop();
@@ -1014,31 +1098,14 @@ private:
 	spill::SpillSet& _spilledVariables
 )
 {
-	StackData const initialData = _data;
-	StackShufflerResult result;
-	do
-	{
-		_data = initialData;
-		Stack<> stack(_data, {});
-		result = StackShuffler<NoOpStackManipulationCallbacks>::shuffle(stack, _args, _liveOut, _targetStackSize, &_spilledVariables);
-		switch (result.status)
-		{
-		case StackShufflerResult::Status::Continue:
-			yulAssert(false);
-		case StackShufflerResult::Status::Admissible:
-			break;
-		case StackShufflerResult::Status::StackTooDeep:
-		{
-			yulAssert(result.culprit.isValue() && !result.culprit.isLiteralValue());
-			yulAssert(!_spilledVariables.isSpilled(result.culprit.value()));
-			_spilledVariables.add(result.culprit.value());
-			break;
-		}
-		case StackShufflerResult::Status::MaxIterationsReached:
-			break;
-		}
-	}
-	while (result.status == StackShufflerResult::Status::StackTooDeep);
+	Stack<> stack(_data, {});
+	StackShufflerResult const result = StackShuffler<NoOpStackManipulationCallbacks>::shuffleWithSpillDiscovery(
+		stack, _args, _liveOut, _targetStackSize, _spilledVariables
+	);
+	yulAssert(
+		result.status == StackShufflerResult::Status::Admissible ||
+		result.status == StackShufflerResult::Status::MaxIterationsReached
+	);
 	return result;
 }
 

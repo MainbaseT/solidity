@@ -32,7 +32,6 @@ Target::Target(
 ):
 	args(_args),
 	liveOut(_liveOut),
-	spilledVariables(_spilledVariables),
 	size(_targetSize),
 	tailSize(_targetSize - _args.size())
 {
