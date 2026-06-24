@@ -825,7 +825,6 @@ General Information)").c_str(),
 	desc.add(metadataOptions);
 
 	po::options_description optimizerOptions("Optimizer Options");
-	static_assert(std::is_same_v<std::uint64_t, decltype(OptimiserSettings{}.expectedExecutionsPerDeployment)>);
 	optimizerOptions.add_options()
 		(
 			g_strOptimize.c_str(),
@@ -833,7 +832,7 @@ General Information)").c_str(),
 		)
 		(
 			g_strOptimizeRuns.c_str(),
-			po::value<std::uint64_t>()->value_name("n")->default_value(OptimiserSettings{}.expectedExecutionsPerDeployment),
+			po::value<OptimiserSettings::ExecutionCount>()->value_name("n")->default_value(OptimiserSettings{}.expectedExecutionsPerDeployment),
 			"The number of runs specifies roughly how often each opcode of the deployed code will be executed across the lifetime of the contract. "
 			"Lower values will optimize more for initial deployment cost, higher values will optimize more for high-frequency usage."
 		)
@@ -1298,7 +1297,7 @@ void CommandLineParser::processArgs()
 		m_args.count(g_strOptimizeYul) > 0
 	);
 	if (!m_args[g_strOptimizeRuns].defaulted())
-		m_options.optimizer.expectedExecutionsPerDeployment = m_args.at(g_strOptimizeRuns).as<std::uint64_t>();
+		m_options.optimizer.expectedExecutionsPerDeployment = m_args.at(g_strOptimizeRuns).as<OptimiserSettings::ExecutionCount>();
 
 	if (m_args.count(g_strYulOptimizations))
 	{
