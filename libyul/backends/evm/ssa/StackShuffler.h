@@ -865,6 +865,15 @@ private:
 				_state.countInTail(slotAtOffset) == 0  // if we don't have the slot in tail right now
 			)
 			{
+				// brings the slot at `offset` to the top (if not already there) and swaps it down
+				// into the tail at `tailOffset`
+				auto const swapIntoTail = [&](StackOffset const _tailOffset)
+				{
+					if (offset != StackOffset{_stack.size() - 1})
+						_stack.swap(offset);
+					_stack.swap(_tailOffset);
+					return ShuffleHelperResult{ShuffleHelperResult::Status::StackModified};
+				};
 				// find the lowest swappable slot in tail that needs to go to args, swap
 				for (StackOffset tailOffset: _state.stackTailRange())
 				{
@@ -875,14 +884,7 @@ private:
 						_state.requiredInArgs(slotAtTailOffset) &&  // we need the tail offset slot in args
 						_state.targetArgsCount(slotAtTailOffset) > _state.countInArgs(slotAtTailOffset)  // we don't already have enough of it in args
 					)
-					{
-						// bring up offset slot if necessary
-						if (offset != StackOffset{_stack.size() - 1})
-							_stack.swap(offset);
-						// swap offset slot down into tail
-						_stack.swap(tailOffset);
-						return {ShuffleHelperResult::Status::StackModified};
-					}
+						return swapIntoTail(tailOffset);
 				}
 				// find the lowest swappable slot in tail that can be popped but is no literal, swap
 				for (StackOffset tailOffset: _state.stackTailRange())
@@ -891,28 +893,14 @@ private:
 						_state.slotCanBeLoadedOrPushed(_stack[tailOffset]) &&
 						!_stack[tailOffset].isLiteralValue()
 					)
-					{
-						// bring up offset slot if necessary
-						if (offset != StackOffset{_stack.size() - 1})
-							_stack.swap(offset);
-						// swap offset slot down into tail
-						_stack.swap(tailOffset);
-						return {ShuffleHelperResult::Status::StackModified};
-					}
+						return swapIntoTail(tailOffset);
 				// find the lowest swappable slot in tail that is a literal, swap
 				for (StackOffset tailOffset: _state.stackTailRange())
 					if (
 						_stack.isValidSwapTarget(tailOffset) &&
 						_stack[tailOffset].isLiteralValue()
 					)
-					{
-						// bring up offset slot if necessary
-						if (offset != StackOffset{_stack.size() - 1})
-							_stack.swap(offset);
-						// swap offset slot down into tail
-						_stack.swap(tailOffset);
-						return {ShuffleHelperResult::Status::StackModified};
-					}
+						return swapIntoTail(tailOffset);
 				// we needed to bring the slot into tail but couldn't, not enough stack target space -> spill to memory
 				return {ShuffleHelperResult::Status::StackTooDeep, validatedCulprit(_stack[offset], _state)};
 			}
