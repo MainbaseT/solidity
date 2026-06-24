@@ -140,7 +140,7 @@ bool State::requiredInTail(StackSlot const& _slot) const
 
 bool State::offsetInTargetArgsRegion(StackOffset const _offset) const
 {
-	return _offset.value >= m_target.size - m_target.args.size() && _offset.value < m_target.size;
+	return _offset.value >= m_target.tailSize && _offset.value < m_target.size;
 }
 
 StackSlot const& State::targetArg(StackOffset const _targetOffset) const
