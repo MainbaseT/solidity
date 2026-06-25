@@ -55,7 +55,7 @@ contract C {
 // gas irOptimized: 122720
 // gas legacy: 125558
 // gas legacyOptimized: 123322
-// gas ssaCFGOptimized: 122621
+// gas ssaCFGOptimized: 122615
 // from_state() -> 0x20, 0x60, 0xa0, 21, 3, 0x666F6F0000000000000000000000000000000000000000000000000000000000, 2, 13, 14
 // gas irOptimized: 121424
 // gas legacy: 125693
@@ -65,4 +65,4 @@ contract C {
 // gas irOptimized: 114852
 // gas legacy: 117950
 // gas legacyOptimized: 115526
-// gas ssaCFGOptimized: 114698
+// gas ssaCFGOptimized: 114687

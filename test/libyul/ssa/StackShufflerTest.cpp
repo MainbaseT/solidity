@@ -559,28 +559,23 @@ explicitly provided.)";
 	// Tracks the kind of each spilled value
 	std::vector<StackSlot> spilledSlotList = testConfig.initialSpilledSetSlots;
 
-	// First, when spilling is allowed, run the shuffler repeatedly without recording to determine
-	// the final spill set. Each iteration starts from the initial stack and adds the culprit of a
-	// recoverable StackTooDeep to the spill set.
+	// First, when spilling is allowed, run the shuffler with spill discovery (without recording) to
+	// determine the final spill set, then render the values discovered on top of the initial set.
 	if (testConfig.allowSpilling)
-		while (true)
-		{
-			auto scratch = *testConfig.initial;
-			Stack<> stack(scratch, {});
-			auto const result = StackShuffler<NoOpStackManipulationCallbacks>::shuffle(
-				stack,
-				*testConfig.targetStackTop,
-				testConfig.targetStackTailSet,
-				*testConfig.targetStackSize,
-				&spillSet
-			);
-			if (
-				result.status != StackShufflerResult::Status::StackTooDeep
-			)
-				break;
-			spillSet.add(result.culprit.value());
-			spilledSlotList.push_back(result.culprit);
-		}
+	{
+		auto scratch = *testConfig.initial;
+		Stack<> stack(scratch, {});
+		shuffleResult = StackShuffler<NoOpStackManipulationCallbacks>::shuffleWithSpillDiscovery(
+			stack,
+			*testConfig.targetStackTop,
+			testConfig.targetStackTailSet,
+			*testConfig.targetStackSize,
+			spillSet
+		);
+		for (InstId const value: spillSet.spilledValues())
+			if (!testConfig.initialSpilledSet.isSpilled(value))
+				spilledSlotList.push_back(Slot::makeValue(table.store, value));
+	}
 
 	// Final shuffle with the (possibly pre-populated) spill set, recording the trace.
 	{
