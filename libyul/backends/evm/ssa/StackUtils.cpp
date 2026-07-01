@@ -154,12 +154,12 @@ OptimalTarget solidity::yul::ssa::findOptimalTarget
 				bestSpillSet = spillSet;
 				consecutiveIncreases = 0;
 			}
-			else if (++consecutiveIncreases >= stopAfter)
+			else if (bestCost == 0 || ++consecutiveIncreases >= stopAfter)
 				break;
 		}
 	}
 	// search upward (only on reverting paths)
-	if (_canIntroduceJunk)
+	if (_canIntroduceJunk && bestCost != 0)
 	{
 		consecutiveIncreases = 0;
 		for (std::size_t size = startSize + 1; size <= startSize + maxUpwardExpansion; ++size)
@@ -172,7 +172,7 @@ OptimalTarget solidity::yul::ssa::findOptimalTarget
 				bestSpillSet = spillSet;
 				consecutiveIncreases = 0;
 			}
-			else if (++consecutiveIncreases >= stopAfter)
+			else if (bestCost == 0 || ++consecutiveIncreases >= stopAfter)
 				break;
 		}
 	}

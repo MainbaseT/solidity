@@ -25,6 +25,7 @@
 
 #include <libyul/AST.h>
 #include <libyul/ControlFlowSideEffectsCollector.h>
+#include <libyul/optimiser/Metrics.h>
 #include <libyul/Exceptions.h>
 #include <libyul/Utilities.h>
 
@@ -81,7 +82,8 @@ std::unique_ptr<ControlFlowGraphs> SSACFGBuilder::build(
 	auto controlFlowGraphs = std::make_unique<ControlFlowGraphs>();
 	controlFlowGraphs->functionGraphs.emplace_back(std::make_unique<SSACFG>(
 		_dialect,
-		_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
+		_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr,
+		2 * CodeSize::codeSize(_block)  // empirically there are roughly 2x the instructions
 	));
 	SSACFG& mainGraph = *controlFlowGraphs->functionGraphs.back();
 	FunctionRegistry functionRegistry;
@@ -375,7 +377,8 @@ void SSACFGBuilder::registerFunctionDefinition(FunctionDefinition const& _functi
 	// reference this function by its FunctionGraphID when their bodies are built later.
 	m_controlFlow.functionGraphs.emplace_back(std::make_unique<SSACFG>(
 		m_dialect,
-		m_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr
+		m_generateDebugInfo ? std::make_unique<SSACFGDebugInfo>() : nullptr,
+		2 * CodeSize::codeSize(_functionDefinition.body)  // empirically there are roughly 2x the instructions
 	));
 	auto const graphID = static_cast<FunctionGraphID>(m_controlFlow.functionGraphs.size() - 1);
 	auto& cfg = *m_controlFlow.functionGraphs.back();
