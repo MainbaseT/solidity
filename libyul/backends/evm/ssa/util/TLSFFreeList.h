@@ -379,7 +379,6 @@ private:
 	Index growStorage(Length const _length)
 	{
 		auto const start = static_cast<Index>(m_data.size());
-		m_data.reserve(m_data.size() + _length);
 		for (Length k = 0; k < _length; ++k)
 			m_data.emplace_back(Tombstone::make());
 		m_headers.resize(m_data.size());
