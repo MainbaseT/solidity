@@ -46,7 +46,7 @@
 // \l\
 // [FunctionCallReturnLabel[0]]\l\
 // f\l\
-// [FunctionCallReturnLabel[0]]\l\
+// []\l\
 // \l\
 // OUT: []\l\
 // "];
