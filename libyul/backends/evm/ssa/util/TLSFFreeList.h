@@ -51,10 +51,12 @@ public:
 	using Index = std::uint32_t;
 	using Length = std::uint32_t;
 
-	TLSFFreeList()
+	explicit TLSFFreeList(std::size_t const _initialCapacity = 0)
 	{
 		for (auto& row: m_binHead)
 			row.fill(EMPTY);
+		m_data.reserve(_initialCapacity);
+		m_headers.reserve(_initialCapacity);
 	}
 	TLSFFreeList(TLSFFreeList const&) = delete;
 	TLSFFreeList(TLSFFreeList&&) = default;
